@@ -1,0 +1,53 @@
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  
+  /* Palette: Feminine Gradient */
+  --primary-gradient: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+  --secondary-gradient: linear-gradient(to top, #a18cd1 0%, #fbc2eb 100%);
+  --accent-gradient: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  
+  --text-dark: #4a4a4a;
+  --text-light: #ffffff;
+  --shadow-soft: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--primary-gradient);
+  background-attachment: fixed;
+  color: var(--text-dark);
+}
+
+button {
+  cursor: pointer;
+  border-radius: 20px;
+  border: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+button:active {
+  transform: scale(0.95);
+}
+
+input, textarea {
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(4px);
+  outline: none;
+}
+
+#root {
+  width: 100%;
+}
