@@ -441,6 +441,7 @@ The first local run path should be straightforward:
 
 - copy `backend/.env.example` to `backend/.env`
 - start MySQL and backend together through `docker-compose.yml` when local MySQL credentials are unknown or inconsistent
+- or start the project-scoped Windows sandbox with `powershell -ExecutionPolicy Bypass -File scripts/mysql-sandbox.ps1 start`
 - run Alembic migrations before relying on API data
 - verify `GET /health`
 - verify `GET /health/ready`
@@ -448,6 +449,11 @@ The first local run path should be straightforward:
 - verify `PUT /api/automation/settings` and `POST /api/automation/preview`
 
 If local MySQL is running on Windows, keep `CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1` in the environment to avoid OpenSSL legacy-provider startup failures when PyMySQL imports `cryptography`.
+
+For the Windows sandbox path, use:
+
+- `DATABASE_URL=mysql+pymysql://blogai:blogai@127.0.0.1:3307/blog_ai_nam_lun`
+- `ENABLE_SCHEDULER=false` while verifying API behavior manually
 
 This runbook exists to reduce ambiguity between schema setup, seed behavior, and application startup.
 
