@@ -1,13 +1,28 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
 from app.core.config import get_settings
+from app.core.database import get_session_factory
+from app.core.scheduler import start_scheduler
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    application = FastAPI(title=settings.app_name)
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        application.state.scheduler = start_scheduler(get_session_factory())
+        try:
+            yield
+        finally:
+            scheduler = getattr(application.state, "scheduler", None)
+            if scheduler is not None:
+                scheduler.shutdown(wait=False)
+
+    application = FastAPI(title=settings.app_name, lifespan=lifespan)
 
     application.add_middleware(
         CORSMiddleware,

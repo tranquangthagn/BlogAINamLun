@@ -7,6 +7,7 @@ from app.schemas.automation import (
     AutomationSettingsPayload,
     AutomationSettingsResponse,
 )
+from app.schemas.posts import PostResponse
 from app.services.automation import AutomationService
 
 
@@ -37,3 +38,8 @@ def preview_candidates(
     session: Session = Depends(get_db_session),
 ) -> list[AutomationPreviewResponse]:
     return AutomationService(session).generate_preview_candidates(payload)
+
+
+@router.post("/post-now", response_model=PostResponse)
+def post_now(session: Session = Depends(get_db_session)) -> PostResponse:
+    return AutomationService(session).post_now_from_settings()

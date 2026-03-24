@@ -27,3 +27,7 @@ class AutomationRepository:
     def add_history_item(self, item: AutomationHistory) -> AutomationHistory:
         self.session.add(item)
         return item
+
+    def get_history_item(self, item_id: int) -> AutomationHistory | None:
+        stmt: Select[tuple[AutomationHistory]] = select(AutomationHistory).where(AutomationHistory.id == item_id)
+        return self.session.scalar(stmt)

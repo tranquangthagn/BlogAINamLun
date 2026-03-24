@@ -4,12 +4,16 @@ from sqlalchemy.orm import Session
 
 from app.models.automation_history import AutomationHistory
 from app.models.automation_settings import AutomationSettings
+from app.models.post import Post
 from app.repositories.automation import AutomationRepository
+from app.repositories.posts import PostsRepository
+from app.schemas.posts import PostResponse
 from app.schemas.automation import (
     AutomationPreviewResponse,
     AutomationSettingsPayload,
     AutomationSettingsResponse,
 )
+from app.services.posts import serialize_post
 
 
 TOPIC_TEMPLATES = [
@@ -63,6 +67,7 @@ class AutomationService:
     def __init__(self, session: Session):
         self.session = session
         self.repository = AutomationRepository(session)
+        self.posts_repository = PostsRepository(session)
 
     def _default_settings(self) -> AutomationSettings:
         return AutomationSettings(
@@ -114,7 +119,13 @@ class AutomationService:
     def get_settings(self) -> AutomationSettingsResponse:
         return self._to_settings_response(self._ensure_settings_row())
 
-    def update_settings(self, payload: AutomationSettingsPayload) -> AutomationSettingsResponse:
+    def _coerce_payload(self, payload: dict | AutomationSettingsPayload) -> AutomationSettingsPayload:
+        if isinstance(payload, AutomationSettingsPayload):
+            return payload
+        return AutomationSettingsPayload.model_validate(payload)
+
+    def update_settings(self, payload: dict | AutomationSettingsPayload) -> AutomationSettingsResponse:
+        payload = self._coerce_payload(payload)
         settings = self._ensure_settings_row()
         settings.enabled = payload.enabled
         settings.schedule_mode = payload.schedule_mode
@@ -152,11 +163,7 @@ class AutomationService:
         self,
         settings_payload: dict | AutomationSettingsPayload | None = None,
     ) -> list[AutomationPreviewResponse]:
-        payload = (
-            settings_payload
-            if isinstance(settings_payload, AutomationSettingsPayload)
-            else AutomationSettingsPayload.model_validate(settings_payload or self.get_settings().model_dump(by_alias=True))
-        )
+        payload = self._coerce_payload(settings_payload or self.get_settings().model_dump(by_alias=True))
         history = self.repository.list_history()
         recent_titles = {title_fingerprint(item.title) for item in history[:8]}
         next_id = max([item.id for item in history], default=0) + 1
@@ -217,3 +224,42 @@ class AutomationService:
             )
         self.session.commit()
         return previews
+
+    def get_history_item(self, item_id: int) -> AutomationHistory:
+        item = self.repository.get_history_item(item_id)
+        if item is None:
+            raise ValueError(f"History item {item_id} not found")
+        return item
+
+    def publish_candidate_now(self, item_id: int) -> Post:
+        item = self.get_history_item(item_id)
+        settings = self._ensure_settings_row()
+        post = Post(
+            author="Tro ly AI",
+            avatar="https://api.dicebear.com/7.x/bottts/svg?seed=NamLunAI",
+            content=f"{item.title}\n\n{item.content}",
+            category=item.category,
+            created_at=item.created_at,
+            likes=0,
+            comments=0,
+            source_type="automation",
+        )
+        self.posts_repository.add_post(post)
+        self.session.flush()
+
+        item.posted = True
+        item.published_post_id = post.id
+        settings.last_run_at = item.created_at
+        settings.last_generated_post_id = item.id
+        settings.updated_at = datetime.now()
+
+        self.session.commit()
+        self.session.refresh(post)
+        return post
+
+    def post_now_from_settings(self) -> PostResponse:
+        settings = self.get_settings()
+        previews = self.generate_preview_candidates(settings_payload=settings.model_dump(by_alias=True))
+        self.record_candidates(previews)
+        post = self.publish_candidate_now(previews[0].id)
+        return serialize_post(post)

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("CRYPTOGRAPHY_OPENSSL_NO_LEGACY", "1")
+os.environ.setdefault("ENABLE_SCHEDULER", "false")
 
 from app.core.database import Base
 from app.core.database import get_db_session

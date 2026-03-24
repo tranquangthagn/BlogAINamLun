@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.repositories.posts import PostsRepository
+from app.models.post import Post
 from app.schemas.posts import PostResponse
 from app.services.seed import ensure_seed_data
 
@@ -28,18 +29,19 @@ class PostsService:
 
     def list_feed_posts(self) -> list[PostResponse]:
         ensure_seed_data(self.session)
-        return [
-            PostResponse(
-                id=post.id,
-                author=post.author,
-                avatar=post.avatar,
-                content=post.content,
-                images=[image.image_url for image in sorted(post.images, key=lambda item: item.position)],
-                time=format_time_since(post.created_at),
-                createdAt=post.created_at.isoformat(),
-                category=post.category,
-                likes=post.likes,
-                comments=post.comments,
-            )
-            for post in self.repository.list_posts()
-        ]
+        return [serialize_post(post) for post in self.repository.list_posts()]
+
+
+def serialize_post(post: Post) -> PostResponse:
+    return PostResponse(
+        id=post.id,
+        author=post.author,
+        avatar=post.avatar,
+        content=post.content,
+        images=[image.image_url for image in sorted(post.images, key=lambda item: item.position)],
+        time=format_time_since(post.created_at),
+        createdAt=post.created_at.isoformat(),
+        category=post.category,
+        likes=post.likes,
+        comments=post.comments,
+    )
