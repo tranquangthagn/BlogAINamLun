@@ -3,3 +3,10 @@ uvicorn
 pydantic
 typing-extensions
 python-multipart
+sqlalchemy
+alembic
+pymysql
+pydantic-settings
+apscheduler
+pytest
+httpx
