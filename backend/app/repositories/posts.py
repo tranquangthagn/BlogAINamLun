@@ -19,6 +19,14 @@ class PostsRepository:
     def count_posts(self) -> int:
         return len(self.list_posts())
 
+    def get_post(self, post_id: int) -> Post | None:
+        stmt: Select[tuple[Post]] = (
+            select(Post)
+            .options(selectinload(Post.images))
+            .where(Post.id == post_id)
+        )
+        return self.session.scalar(stmt)
+
     def add_post(self, post: Post) -> Post:
         self.session.add(post)
         return post

@@ -12,6 +12,8 @@ os.environ.setdefault("CRYPTOGRAPHY_OPENSSL_NO_LEGACY", "1")
 from app.core.database import Base
 from app.core.database import get_db_session
 from app.main import create_app
+from app.repositories.posts import PostsRepository
+from app.services.seed import ensure_seed_data
 
 
 def create_test_client() -> TestClient:
@@ -56,3 +58,9 @@ def client(db_session) -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def seeded_post(db_session):
+    ensure_seed_data(db_session)
+    return PostsRepository(db_session).list_posts()[0]
