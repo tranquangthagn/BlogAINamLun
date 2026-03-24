@@ -1,0 +1,349 @@
+# Backend System Foundation Design
+
+**Date:** 2026-03-24
+**Project:** BlogAINamLun
+**Status:** Approved in-session
+
+## Goal
+
+Build the first real backend and system foundation for BlogAINamLun so the app can move from browser-only local state to a durable, testable, deployable platform.
+
+This phase should replace the current mock-only FastAPI setup and prepare the project for real automation, persistent content, and safer operational workflows without over-engineering the architecture.
+
+## Product Context
+
+The current frontend already delivers the intended product experience across:
+
+- feed browsing
+- archive browsing
+- automation settings and preview flows
+
+However, the product state is still held almost entirely in the browser through local storage and frontend utility functions. The existing backend only exposes a minimal in-memory posts API in [backend/main.py](C:/Users/thang/MyProjects/BlogAINamLun/backend/main.py).
+
+That means the next backend step should prioritize persistence, clean service boundaries, and operational readiness before adding more product surface area.
+
+## Approved Direction
+
+The approved implementation direction is:
+
+**Modular Monolith**
+
+This means:
+
+- one FastAPI application
+- one primary relational database
+- one codebase for API, business logic, and scheduler
+- clear internal module boundaries so the app can scale without becoming tangled
+
+This direction is preferred because it gives the project production-worthy structure while staying appropriately sized for the current product.
+
+## Why Not Other Approaches
+
+### Thin MVP API Only
+
+This would be faster in the very short term, but it would keep too much logic in the frontend and would delay the point where automation can run as a real backend capability.
+
+### Full Multi-Service Architecture
+
+This would add unnecessary complexity too early. The current product does not yet justify separate API, worker, queue, and orchestration layers. Doing that now would slow delivery and raise operational overhead without enough payoff.
+
+## Architecture Overview
+
+The backend will remain a single FastAPI service, but it will be reorganized into focused internal layers:
+
+- `api`: route handlers and HTTP contracts
+- `schemas`: request and response models
+- `services`: business logic
+- `repositories`: database access
+- `models`: ORM entities
+- `core`: configuration, database bootstrapping, startup wiring
+
+This structure should replace the current all-in-one file pattern and keep domain logic testable and reusable.
+
+## Domain Modules
+
+The first backend version should support four core domains.
+
+### Posts
+
+Responsibilities:
+
+- serve the feed
+- store seeded posts and automation-published posts
+- support filtering for category and date-based browsing
+- expose post data in a shape the current frontend can consume with minimal redesign
+
+### Archive
+
+Responsibilities:
+
+- persist saved state for posts
+- persist read state for posts
+- support archive queries for saved items and reading history
+
+This replaces browser-only archive behavior and makes the archive portable across sessions and devices.
+
+### Automation
+
+Responsibilities:
+
+- persist automation settings
+- generate preview candidates
+- persist generation history
+- publish selected candidates into the feed
+- run scheduled auto-post checks in the backend
+
+The generation behavior should initially mirror the current frontend rule-based logic so that the product behavior remains familiar while responsibility moves to the backend.
+
+### System
+
+Responsibilities:
+
+- environment configuration
+- database wiring
+- CORS configuration
+- startup and shutdown hooks
+- health checks
+- scheduler startup
+
+This domain exists to make the application operable in development and deployable later without mixing infrastructure details into product modules.
+
+## Data Model
+
+The backend should introduce persistent relational storage with PostgreSQL as the source of truth.
+
+### `posts`
+
+Stores every post that can appear in the feed.
+
+Recommended fields:
+
+- `id`
+- `author`
+- `avatar`
+- `content`
+- `category`
+- `created_at`
+- `likes`
+- `comments`
+- `source_type` with values such as `seeded` and `automation`
+
+### `post_images`
+
+Stores one-to-many post images so feed entries can preserve the multi-image shape already used in the frontend.
+
+Recommended fields:
+
+- `id`
+- `post_id`
+- `image_url`
+- `position`
+
+### `user_post_states`
+
+Stores archive-related per-post state.
+
+Recommended fields:
+
+- `id`
+- `post_id`
+- `saved`
+- `saved_at`
+- `read`
+- `read_at`
+
+This table replaces frontend local storage keys for saved and read state.
+
+### `automation_settings`
+
+Stores the active automation configuration for this phase.
+
+Recommended fields:
+
+- `id`
+- `enabled`
+- `schedule_mode`
+- `post_time`
+- `interval_minutes`
+- `sources`
+- `trend_range_mode`
+- `custom_start`
+- `custom_end`
+- `last_run_at`
+- `last_generated_post_id`
+- `updated_at`
+
+Only one active settings record is needed for the current single-owner product.
+
+### `automation_history`
+
+Stores generated candidates and posting history.
+
+Recommended fields:
+
+- `id`
+- `title`
+- `content`
+- `source`
+- `topic_key`
+- `category`
+- `created_at`
+- `posted`
+- `published_post_id`
+
+This table tracks what the automation considered and what eventually became visible in the feed.
+
+## Core Data Principle
+
+Two persistence concepts should remain separate:
+
+- `posts` contains content already published into the feed
+- `automation_history` contains candidate content generated by automation
+
+When a candidate is posted, it should remain traceable through history while also creating or linking the published feed post record.
+
+This separation keeps preview behavior, auditability, and feed rendering simpler.
+
+## API Design
+
+The first backend version should expose a clean JSON API for the current frontend.
+
+### System Routes
+
+- `GET /health`
+
+Returns application health and confirms core dependencies are available.
+
+### Posts Routes
+
+- `GET /api/posts`
+
+Returns feed posts, including automation-published entries and support for future filtering.
+
+### Archive Routes
+
+- `GET /api/archive`
+- `POST /api/posts/{id}/save`
+- `DELETE /api/posts/{id}/save`
+- `POST /api/posts/{id}/read`
+
+These routes support the saved and read flows currently backed by local browser state.
+
+### Automation Routes
+
+- `GET /api/automation/settings`
+- `PUT /api/automation/settings`
+- `GET /api/automation/history`
+- `POST /api/automation/preview`
+- `POST /api/automation/post-now`
+
+These routes replace the browser-only automation utility logic and allow both preview and actual publishing workflows to live in the backend.
+
+## Scheduler Design
+
+The backend should include an internal scheduler in this phase.
+
+Expected behavior:
+
+- run on a short recurring interval, such as once per minute
+- load active automation settings
+- determine whether the schedule is due
+- generate candidates when due
+- persist automation history
+- publish the selected candidate into `posts`
+- update `last_run_at` and `last_generated_post_id`
+
+The scheduler should remain inside the FastAPI service for now. This keeps the system simple while still enabling real background behavior.
+
+If future scale or reliability requirements increase, this can later evolve into a separate worker process.
+
+## Frontend Rollout Strategy
+
+Migration from local storage should happen incrementally so the UI remains stable.
+
+### Phase 1
+
+Build backend modules, database models, migrations, and API routes while preserving current frontend behavior.
+
+### Phase 2
+
+Move the settings page to backend-backed reads and writes for:
+
+- automation settings
+- preview generation
+- post-now behavior
+- generation history
+
+### Phase 3
+
+Move feed, archive, saved, and read state to backend APIs.
+
+### Phase 4
+
+Keep seeded data support so the app does not appear empty on first run, but treat database-backed content as the primary source of truth.
+
+## Error Handling
+
+The backend should provide explicit validation and operational guardrails.
+
+Required behavior:
+
+- reject invalid automation settings with clear API validation messages
+- fail fast on startup if required database configuration is missing
+- return not found errors for missing posts
+- keep scheduler failures from crashing the whole app, while still logging them
+
+## Testing Strategy
+
+The backend foundation is successful only if it is testable.
+
+The first implementation should include tests for:
+
+- automation settings validation
+- candidate generation rules
+- candidate posting flow
+- feed retrieval and merge behavior
+- archive saved/read state changes
+- health route and key API routes
+
+Tests should focus on service-level correctness first, then add route-level coverage for integration confidence.
+
+## Operational Foundation
+
+The system setup should include:
+
+- `.env`-driven configuration
+- database connection settings
+- migration support
+- local development startup instructions
+- Docker support for app and database
+
+This is enough operational structure to make the project reproducible and easier to deploy later without forcing full production platform complexity today.
+
+## Technical Intent
+
+This work should not attempt to solve everything at once.
+
+It should:
+
+- create a clean backend foundation
+- centralize business logic in the backend
+- preserve the current frontend experience as much as possible
+- open a path for future AI integration, better automation, and deployment
+
+It should not yet:
+
+- introduce authentication
+- split into microservices
+- add distributed queues
+- redesign the frontend experience again
+
+## Success Criteria
+
+This backend foundation is successful when:
+
+- the app has a real persistent backend instead of browser-only state
+- automation logic can run through backend APIs and scheduled execution
+- the backend code is modular and testable
+- the frontend can begin switching to backend data without major UI disruption
+- the project is easier to run, reason about, and deploy than the current mock setup
