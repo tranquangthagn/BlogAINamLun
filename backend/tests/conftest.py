@@ -5,10 +5,12 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("CRYPTOGRAPHY_OPENSSL_NO_LEGACY", "1")
 
 from app.core.database import Base
+from app.core.database import get_db_session
 from app.main import create_app
 
 
@@ -20,7 +22,12 @@ def create_test_client() -> TestClient:
 def db_engine():
     from app import models  # noqa: F401
 
-    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(engine)
     try:
         yield engine
@@ -36,3 +43,16 @@ def db_session(db_engine) -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture()
+def client(db_session) -> Generator[TestClient, None, None]:
+    app = create_app()
+
+    def override_get_db_session():
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()

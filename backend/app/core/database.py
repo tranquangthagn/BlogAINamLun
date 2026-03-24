@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from functools import lru_cache
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -10,13 +11,19 @@ class Base(DeclarativeBase):
     pass
 
 
-settings = get_settings()
-engine = create_engine(settings.database_url, future=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+@lru_cache(maxsize=1)
+def get_engine():
+    settings = get_settings()
+    return create_engine(settings.database_url, future=True)
+
+
+@lru_cache(maxsize=1)
+def get_session_factory():
+    return sessionmaker(bind=get_engine(), autoflush=False, autocommit=False, future=True)
 
 
 def get_db_session() -> Generator[Session, None, None]:
-    session = SessionLocal()
+    session = get_session_factory()()
     try:
         yield session
     finally:
