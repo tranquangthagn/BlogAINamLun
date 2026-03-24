@@ -14,7 +14,10 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
-        application.state.scheduler = start_scheduler(get_session_factory())
+        if settings.enable_scheduler:
+            application.state.scheduler = start_scheduler(get_session_factory())
+        else:
+            application.state.scheduler = None
         try:
             yield
         finally:
