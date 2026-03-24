@@ -15,11 +15,13 @@ test('archive uses editorial archive shell classes', () => {
   assert.ok(source.includes('editorial-archive-feed'));
 });
 
-test('archive still integrates generated posts into read history source', () => {
+test('archive syncs saved and read history from backend apis', () => {
   const source = readFileSync(archivePath, 'utf8');
 
-  assert.ok(source.includes('loadGeneratedFeedPosts'));
-  assert.ok(source.includes('mergeFeedPosts'));
+  assert.ok(source.includes("import { listArchive } from '../api/archive'"));
+  assert.ok(source.includes("Promise.all([listArchive('saved'), listArchive('read')])"));
+  assert.ok(source.includes("window.addEventListener('blog-archive-updated', syncArchive)"));
+  assert.ok(source.includes("window.addEventListener('blog-read-updated', syncArchive)"));
 });
 
 test('app css defines editorial archive styles', () => {

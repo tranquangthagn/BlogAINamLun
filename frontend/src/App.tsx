@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   BrowserRouter as Router,
   Route,
@@ -10,22 +10,7 @@ import Sidebar from './components/Sidebar';
 import Home from './pages/Home';
 import Archive from './pages/Archive';
 import Settings from './pages/Settings';
-import {
-  appendPostedFeedPost,
-  generateAutomationCandidates,
-  loadAutomationSettings,
-  loadGeneratedFeedPosts,
-  loadGenerationHistory,
-  markPreviewAsPosted,
-  saveAutomationSettings,
-  saveGeneratedFeedPosts,
-  saveGenerationHistory,
-  shouldRunAutomationNow,
-  upsertPreviewIntoHistory,
-} from './data/automationSettings';
 import './App.css';
-
-const AUTOMATION_EVENT = 'blog-ai-automation-updated';
 
 const SHELL_COPY: Record<
   string,
@@ -64,43 +49,6 @@ function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
   const shellCopy = SHELL_COPY[location.pathname] ?? SHELL_COPY['/'];
-
-  useEffect(() => {
-    const runAutomationTick = () => {
-      const settings = loadAutomationSettings();
-      if (!shouldRunAutomationNow(settings, settings.lastRunAt)) {
-        return;
-      }
-
-      try {
-        const history = loadGenerationHistory();
-        const candidates = generateAutomationCandidates(
-          settings,
-          history.filter((item) => item.posted),
-        );
-        const postedPreview = markPreviewAsPosted(candidates[0]);
-        const nextHistory = upsertPreviewIntoHistory(postedPreview, history);
-        const nextFeedPosts = appendPostedFeedPost(postedPreview.feedPost, loadGeneratedFeedPosts());
-        const nextSettings = {
-          ...settings,
-          lastRunAt: postedPreview.createdAt,
-          lastGeneratedPostId: postedPreview.id,
-        };
-
-        saveGenerationHistory(nextHistory);
-        saveGeneratedFeedPosts(nextFeedPosts);
-        saveAutomationSettings(nextSettings);
-        window.dispatchEvent(new Event(AUTOMATION_EVENT));
-      } catch {
-        // Invalid settings should not break the app loop.
-      }
-    };
-
-    runAutomationTick();
-    const timer = window.setInterval(runAutomationTick, 60_000);
-
-    return () => window.clearInterval(timer);
-  }, []);
 
   return (
     <div className="app-container">

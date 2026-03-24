@@ -6,21 +6,19 @@ import { resolve } from 'node:path';
 const settingsPath = resolve('src/pages/Settings.tsx');
 const appPath = resolve('src/App.tsx');
 
-test('settings page file exists with key automation sections', () => {
+test('settings page file exists with backend automation sections', () => {
   assert.ok(existsSync(settingsPath), 'Expected Settings.tsx to exist');
 
   const source = readFileSync(settingsPath, 'utf8');
   const expectedTexts = [
-    'Tự động đăng bài',
-    'Lịch đăng bài',
-    'Theo giờ cố định',
-    'Mấy phút một lần',
-    'Nguồn trend',
-    'Phạm vi dữ liệu',
-    'Tạo bài nháp xem trước',
-    'Đăng thử ngay',
-    'Tổng quan AI',
-    'Xem trước và hành động',
+    'getAutomationSettings',
+    'listAutomationHistory',
+    'previewAutomationCandidates',
+    'postAutomationNow',
+    'updateAutomationSettings',
+    'settings-status-card',
+    'settings-preview-card',
+    'fixedTimeTopResultsCount',
   ];
 
   for (const text of expectedTexts) {

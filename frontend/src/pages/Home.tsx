@@ -10,9 +10,10 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
+import { listArchive } from '../api/archive';
+import { listPosts } from '../api/posts';
 import PostCard from '../components/PostCard';
-import { FAKE_POSTS, type Post } from '../data/mockData';
-import { loadGeneratedFeedPosts, mergeFeedPosts } from '../data/automationSettings';
+import type { Post } from '../data/mockData';
 
 dayjs.extend(isBetween);
 
@@ -29,44 +30,42 @@ const rangePresets: { label: string; value: [dayjs.Dayjs, dayjs.Dayjs] }[] = [
 const Home: React.FC = () => {
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | number>('all');
-  const [generatedPosts, setGeneratedPosts] = useState<Post[]>([]);
+  const [feedPosts, setFeedPosts] = useState<Post[]>([]);
   const [readPostIds, setReadPostIds] = useState<number[]>([]);
 
   useEffect(() => {
-    const syncGeneratedPosts = () => {
-      setGeneratedPosts(loadGeneratedFeedPosts());
-    };
+    let active = true;
 
-    const syncReadPosts = () => {
-      const readRaw = localStorage.getItem('blog-read-posts');
-      if (readRaw) {
-        setReadPostIds(JSON.parse(readRaw));
-        return;
+    const syncFeed = async () => {
+      try {
+        const [posts, readArchive] = await Promise.all([listPosts(), listArchive('read')]);
+        if (!active) {
+          return;
+        }
+
+        setFeedPosts(posts);
+        setReadPostIds(readArchive.map((post) => post.id));
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setFeedPosts([]);
+        setReadPostIds([]);
       }
-
-      setReadPostIds([]);
     };
 
-    const handleStorage = () => {
-      syncGeneratedPosts();
-      syncReadPosts();
-    };
+    syncFeed();
 
-    syncGeneratedPosts();
-    syncReadPosts();
-
-    window.addEventListener(AUTOMATION_EVENT, syncGeneratedPosts);
-    window.addEventListener('blog-read-updated', syncReadPosts);
-    window.addEventListener('storage', handleStorage);
+    window.addEventListener(AUTOMATION_EVENT, syncFeed);
+    window.addEventListener('blog-read-updated', syncFeed);
 
     return () => {
-      window.removeEventListener(AUTOMATION_EVENT, syncGeneratedPosts);
-      window.removeEventListener('blog-read-updated', syncReadPosts);
-      window.removeEventListener('storage', handleStorage);
+      active = false;
+      window.removeEventListener(AUTOMATION_EVENT, syncFeed);
+      window.removeEventListener('blog-read-updated', syncFeed);
     };
   }, []);
-
-  const feedPosts = useMemo(() => mergeFeedPosts(FAKE_POSTS, generatedPosts), [generatedPosts]);
 
   const filteredPosts = useMemo(() => {
     return feedPosts.filter((post) => {

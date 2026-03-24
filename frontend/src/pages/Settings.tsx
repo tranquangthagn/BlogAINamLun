@@ -24,24 +24,21 @@ import {
 } from 'lucide-react';
 import dayjs, { Dayjs } from 'dayjs';
 import {
-  appendPostedFeedPost,
+  getAutomationSettings,
+  listAutomationHistory,
+  postAutomationNow,
+  previewAutomationCandidates,
+  updateAutomationSettings,
+} from '../api/automation';
+import {
   automationSourceLabels,
   createDefaultAutomationSettings,
   createScheduleSummary,
   createStatusText,
   fixedTimeTopResultsCount,
-  generateAutomationCandidates,
-  loadAutomationSettings,
-  loadGeneratedFeedPosts,
-  loadGenerationHistory,
-  markPreviewAsPosted,
-  saveAutomationSettings,
-  saveGeneratedFeedPosts,
-  saveGenerationHistory,
-  upsertPreviewIntoHistory,
   validateAutomationSettings,
-  type AutomationPreview,
   type AutomationSettings,
+  type GeneratedPostHistoryItem,
   type ScheduleMode,
   type TrendRangeMode,
   type TrendSource,
@@ -65,10 +62,10 @@ const SOURCE_META: Array<{
 ];
 
 const RANGE_OPTIONS: Array<{ value: TrendRangeMode; label: string; caption: string }> = [
-  { value: 'day', label: 'Theo ngày', caption: 'Ưu tiên tín hiệu mới nhất trong ngày.' },
-  { value: 'week', label: 'Theo tuần', caption: 'Cân bằng giữa mới và ổn định.' },
-  { value: 'quarter', label: 'Theo quý', caption: 'Tìm những mô-típ dài hơi hơn.' },
-  { value: 'custom', label: 'Custom ngày', caption: 'Tự chọn chính xác khoảng ngày muốn nhìn.' },
+  { value: 'day', label: 'Theo ngĂ y', caption: 'Æ¯u tiĂªn tĂ­n hiá»‡u má»›i nháº¥t trong ngĂ y.' },
+  { value: 'week', label: 'Theo tuáº§n', caption: 'CĂ¢n báº±ng giá»¯a má»›i vĂ  á»•n Ä‘á»‹nh.' },
+  { value: 'quarter', label: 'Theo quĂ½', caption: 'TĂ¬m nhá»¯ng mĂ´-tĂ­p dĂ i hÆ¡i hÆ¡n.' },
+  { value: 'custom', label: 'Custom ngĂ y', caption: 'Tá»± chá»n chĂ­nh xĂ¡c khoáº£ng ngĂ y muá»‘n nhĂ¬n.' },
 ];
 
 const SCHEDULE_OPTIONS: Array<{
@@ -78,13 +75,13 @@ const SCHEDULE_OPTIONS: Array<{
 }> = [
   {
     value: 'fixed_time',
-    label: 'Theo giờ cố định',
-    caption: 'AI chấm top 5 kết quả tốt nhất và đăng bài đứng đầu đúng khung giờ bạn chọn.',
+    label: 'Theo giá» cá»‘ Ä‘á»‹nh',
+    caption: 'AI cháº¥m top 5 káº¿t quáº£ tá»‘t nháº¥t vĂ  Ä‘Äƒng bĂ i Ä‘á»©ng Ä‘áº§u Ä‘Ăºng khung giá» báº¡n chá»n.',
   },
   {
     value: 'interval_minutes',
-    label: 'Mấy phút một lần',
-    caption: 'Mỗi chu kỳ chỉ chọn 1 kết quả tốt nhất ở thời điểm hiện tại để đăng.',
+    label: 'Máº¥y phĂºt má»™t láº§n',
+    caption: 'Má»—i chu ká»³ chá»‰ chá»n 1 káº¿t quáº£ tá»‘t nháº¥t á»Ÿ thá»i Ä‘iá»ƒm hiá»‡n táº¡i Ä‘á»ƒ Ä‘Äƒng.',
   },
 ];
 
@@ -106,12 +103,40 @@ const cardMotion = {
 const Settings: React.FC = () => {
   const [messageApi, contextHolder] = message.useMessage();
   const [settings, setSettings] = useState<AutomationSettings>(createDefaultAutomationSettings());
-  const [history, setHistory] = useState(() => loadGenerationHistory());
-  const [previewCandidates, setPreviewCandidates] = useState<AutomationPreview[]>([]);
+  const [history, setHistory] = useState<GeneratedPostHistoryItem[]>([]);
+  const [previewCandidates, setPreviewCandidates] = useState<GeneratedPostHistoryItem[]>([]);
 
   useEffect(() => {
-    setSettings(loadAutomationSettings());
-    setHistory(loadGenerationHistory());
+    let active = true;
+
+    const loadBackendState = async () => {
+      try {
+        const [nextSettings, nextHistory] = await Promise.all([
+          getAutomationSettings(),
+          listAutomationHistory(),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        setSettings(nextSettings);
+        setHistory(nextHistory);
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setSettings(createDefaultAutomationSettings());
+        setHistory([]);
+      }
+    };
+
+    loadBackendState();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const validation = useMemo(() => validateAutomationSettings(settings), [settings]);
@@ -122,7 +147,7 @@ const Settings: React.FC = () => {
     () =>
       settings.sources.length > 0
         ? settings.sources.map((source) => automationSourceLabels[source]).join(', ')
-        : 'Chưa chọn nguồn',
+        : 'ChÆ°a chá»n nguá»“n',
     [settings.sources],
   );
 
@@ -146,57 +171,47 @@ const Settings: React.FC = () => {
     });
   };
 
-  const handleSaveSettings = () => {
-    saveAutomationSettings(settings);
-    emitAutomationChanged();
-    messageApi.success('Đã lưu cài đặt trợ lý tự động đăng bài.');
+  const handleSaveSettings = async () => {
+    try {
+      const nextSettings = await updateAutomationSettings(settings);
+      setSettings(nextSettings);
+      emitAutomationChanged();
+      messageApi.success('ÄĂ£ lÆ°u cĂ i Ä‘áº·t trá»£ lĂ½ tá»± Ä‘á»™ng Ä‘Äƒng bĂ i.');
+    } catch (error) {
+      messageApi.warning(error instanceof Error ? error.message : 'ChÆ°a thá»ƒ lÆ°u cĂ i Ä‘áº·t.');
+    }
   };
 
-  const handleGeneratePreview = () => {
+  const handleGeneratePreview = async () => {
     try {
-      const nextCandidates = generateAutomationCandidates(
-        settings,
-        history.filter((item) => item.posted),
-      );
+      const nextCandidates = await previewAutomationCandidates(settings);
 
       setPreviewCandidates(nextCandidates);
       messageApi.success(
         settings.scheduleMode === 'fixed_time'
-          ? `Đã tạo top ${fixedTimeTopResultsCount} bài nháp xem trước.`
-          : 'Đã tạo bài nháp xem trước cho chu kỳ hiện tại.',
+          ? `ÄĂ£ táº¡o top ${fixedTimeTopResultsCount} bĂ i nhĂ¡p xem trÆ°á»›c.`
+          : 'ÄĂ£ táº¡o bĂ i nhĂ¡p xem trÆ°á»›c cho chu ká»³ hiá»‡n táº¡i.',
       );
     } catch (error) {
-      messageApi.warning(error instanceof Error ? error.message : 'Chưa thể tạo bài nháp.');
+      messageApi.warning(error instanceof Error ? error.message : 'ChÆ°a thá»ƒ táº¡o bĂ i nhĂ¡p.');
     }
   };
 
-  const handlePostNow = () => {
+  const handlePostNow = async () => {
     try {
-      const baseCandidates =
-        previewCandidates.length > 0
-          ? previewCandidates
-          : generateAutomationCandidates(settings, history.filter((item) => item.posted));
-
-      const postedPreview = markPreviewAsPosted(baseCandidates[0]);
-      const nextHistory = upsertPreviewIntoHistory(postedPreview, history);
-      const nextSettings = {
-        ...settings,
-        lastRunAt: postedPreview.createdAt,
-        lastGeneratedPostId: postedPreview.id,
-      };
-      const nextFeedPosts = appendPostedFeedPost(postedPreview.feedPost, loadGeneratedFeedPosts());
-
-      saveGenerationHistory(nextHistory);
-      saveGeneratedFeedPosts(nextFeedPosts);
-      saveAutomationSettings(nextSettings);
+      const nextSettings = await updateAutomationSettings(settings);
+      await postAutomationNow();
+      const nextHistory = await listAutomationHistory();
 
       setHistory(nextHistory);
       setSettings(nextSettings);
-      setPreviewCandidates([{ ...postedPreview }, ...baseCandidates.slice(1)]);
+      setPreviewCandidates((current) =>
+        current.map((item, index) => (index === 0 ? { ...item, posted: true } : item)),
+      );
       emitAutomationChanged();
-      messageApi.success('AI đã đăng thử một bài mới vào Bản tin.');
+      messageApi.success('AI Ä‘Ă£ Ä‘Äƒng thá»­ má»™t bĂ i má»›i vĂ o Báº£n tin.');
     } catch (error) {
-      messageApi.warning(error instanceof Error ? error.message : 'Chưa thể đăng bài ngay lúc này.');
+      messageApi.warning(error instanceof Error ? error.message : 'ChÆ°a thá»ƒ Ä‘Äƒng bĂ i ngay lĂºc nĂ y.');
     }
   };
 
@@ -212,14 +227,14 @@ const Settings: React.FC = () => {
       >
         <div className="settings-hero__copy">
           <Tag className="settings-pill" color={settings.enabled ? 'green' : 'default'}>
-            {settings.enabled ? 'Đang tự động chạy' : 'Đang nghỉ'}
+            {settings.enabled ? 'Äang tá»± Ä‘á»™ng cháº¡y' : 'Äang nghá»‰'}
           </Tag>
           <Title level={1} className="settings-hero__title">
-            Tự động đăng bài
+            Tá»± Ä‘á»™ng Ä‘Äƒng bĂ i
           </Title>
           <Paragraph className="settings-hero__description">
-            Một phòng điều khiển rõ nhịp hơn cho trợ lý AI của bạn: chọn lịch đăng, nguồn trend
-            và phạm vi dữ liệu, rồi để AI tự tạo bài phù hợp với nhịp feed mà bạn muốn.
+            Má»™t phĂ²ng Ä‘iá»u khiá»ƒn rĂµ nhá»‹p hÆ¡n cho trá»£ lĂ½ AI cá»§a báº¡n: chá»n lá»‹ch Ä‘Äƒng, nguá»“n trend
+            vĂ  pháº¡m vi dá»¯ liá»‡u, rá»“i Ä‘á»ƒ AI tá»± táº¡o bĂ i phĂ¹ há»£p vá»›i nhá»‹p feed mĂ  báº¡n muá»‘n.
           </Paragraph>
           <div className="settings-hero__status">
             <Badge status={settings.enabled ? 'processing' : 'default'} />
@@ -230,7 +245,7 @@ const Settings: React.FC = () => {
         <div className="settings-hero__toggle">
           <div className="settings-hero__toggle-label">
             <Sparkles size={20} />
-            <span>Bật chế độ auto-post</span>
+            <span>Báº­t cháº¿ Ä‘á»™ auto-post</span>
           </div>
           <Switch
             checked={settings.enabled}
@@ -239,8 +254,8 @@ const Settings: React.FC = () => {
           />
           <Paragraph className="settings-hero__hint">
             {settings.scheduleMode === 'fixed_time'
-              ? `Khi app đang mở, AI sẽ chấm top ${fixedTimeTopResultsCount} kết quả và đăng bài đứng đầu đúng giờ.`
-              : `Khi app đang mở, AI sẽ kiểm tra sau mỗi ${settings.intervalMinutes} phút để đăng 1 kết quả tốt nhất.`}
+              ? `Khi app Ä‘ang má»Ÿ, AI sáº½ cháº¥m top ${fixedTimeTopResultsCount} káº¿t quáº£ vĂ  Ä‘Äƒng bĂ i Ä‘á»©ng Ä‘áº§u Ä‘Ăºng giá».`
+              : `Khi app Ä‘ang má»Ÿ, AI sáº½ kiá»ƒm tra sau má»—i ${settings.intervalMinutes} phĂºt Ä‘á»ƒ Ä‘Äƒng 1 káº¿t quáº£ tá»‘t nháº¥t.`}
           </Paragraph>
         </div>
       </motion.section>
@@ -251,11 +266,11 @@ const Settings: React.FC = () => {
             <Card className="settings-card">
               <div className="settings-card__header">
                 <Clock3 size={18} />
-                <Title level={3}>Lịch đăng bài</Title>
+                <Title level={3}>Lá»‹ch Ä‘Äƒng bĂ i</Title>
               </div>
               <Paragraph className="settings-muted">
-                Chọn cách AI lên nhịp đăng bài: theo giờ cố định với top 5, hoặc theo chu kỳ
-                phút với 1 kết quả mỗi lượt.
+                Chá»n cĂ¡ch AI lĂªn nhá»‹p Ä‘Äƒng bĂ i: theo giá» cá»‘ Ä‘á»‹nh vá»›i top 5, hoáº·c theo chu ká»³
+                phĂºt vá»›i 1 káº¿t quáº£ má»—i lÆ°á»£t.
               </Paragraph>
 
               <div className="range-grid">
@@ -293,7 +308,7 @@ const Settings: React.FC = () => {
                     max={720}
                     value={settings.intervalMinutes}
                     size="large"
-                    addonAfter="phút"
+                    addonAfter="phĂºt"
                     onChange={(value) =>
                       updateSettings({
                         ...settings,
@@ -312,10 +327,10 @@ const Settings: React.FC = () => {
             <Card className="settings-card">
               <div className="settings-card__header">
                 <Flame size={18} />
-                <Title level={3}>Nguồn trend</Title>
+                <Title level={3}>Nguá»“n trend</Title>
               </div>
               <Paragraph className="settings-muted">
-                Chọn từng kênh riêng lẻ để AI ưu tiên lấy tín hiệu trend mô phỏng.
+                Chá»n tá»«ng kĂªnh riĂªng láº» Ä‘á»ƒ AI Æ°u tiĂªn láº¥y tĂ­n hiá»‡u trend mĂ´ phá»ng.
               </Paragraph>
 
               <div className="source-grid">
@@ -343,10 +358,10 @@ const Settings: React.FC = () => {
             <Card className="settings-card">
               <div className="settings-card__header">
                 <Wand2 size={18} />
-                <Title level={3}>Phạm vi dữ liệu</Title>
+                <Title level={3}>Pháº¡m vi dá»¯ liá»‡u</Title>
               </div>
               <Paragraph className="settings-muted">
-                Chỉ chọn một kiểu phạm vi mỗi lần để AI giữ được góc viết tập trung hơn.
+                Chá»‰ chá»n má»™t kiá»ƒu pháº¡m vi má»—i láº§n Ä‘á»ƒ AI giá»¯ Ä‘Æ°á»£c gĂ³c viáº¿t táº­p trung hÆ¡n.
               </Paragraph>
 
               <div className="range-grid">
@@ -394,11 +409,11 @@ const Settings: React.FC = () => {
             <Card className="settings-card settings-status-card">
               <div className="settings-card__header">
                 <Sparkles size={18} />
-                <Title level={3}>Tổng quan AI</Title>
+                <Title level={3}>Tá»•ng quan AI</Title>
               </div>
               <Paragraph className="settings-muted">
-                Một góc nhìn nhanh để biết trợ lý đang chạy theo nhịp nào, lấy trend từ đâu và
-                lần cuối đã tạo gì.
+                Má»™t gĂ³c nhĂ¬n nhanh Ä‘á»ƒ biáº¿t trá»£ lĂ½ Ä‘ang cháº¡y theo nhá»‹p nĂ o, láº¥y trend tá»« Ä‘Ă¢u vĂ 
+                láº§n cuá»‘i Ä‘Ă£ táº¡o gĂ¬.
               </Paragraph>
 
               <div className="settings-summary-box">
@@ -407,19 +422,19 @@ const Settings: React.FC = () => {
 
               <div className="settings-status-card__stack">
                 <div className="settings-status-card__line">
-                  <span>Lịch hiện tại</span>
+                  <span>Lá»‹ch hiá»‡n táº¡i</span>
                   <strong>{scheduleSummary}</strong>
                 </div>
                 <div className="settings-status-card__line">
-                  <span>Nguồn đang bật</span>
+                  <span>Nguá»“n Ä‘ang báº­t</span>
                   <strong>{sourceSummary}</strong>
                 </div>
                 <div className="settings-status-card__line">
                   <span>Candidate</span>
                   <strong>
                     {settings.scheduleMode === 'fixed_time'
-                      ? `Top ${fixedTimeTopResultsCount} bài mỗi lượt`
-                      : '1 bài mới mỗi chu kỳ'}
+                      ? `Top ${fixedTimeTopResultsCount} bĂ i má»—i lÆ°á»£t`
+                      : '1 bĂ i má»›i má»—i chu ká»³'}
                   </strong>
                 </div>
               </div>
@@ -430,21 +445,21 @@ const Settings: React.FC = () => {
             <Card className="settings-card">
               <div className="settings-card__header">
                 <Sparkles size={18} />
-                <Title level={3}>Chất lượng nội dung</Title>
+                <Title level={3}>Cháº¥t lÆ°á»£ng ná»™i dung</Title>
               </div>
               <ul className="quality-list">
-                <li>Mỗi lần chạy chỉ đăng 1 bài để giữ chất lượng tốt hơn.</li>
-                <li>Không lặp tiêu đề gần đây.</li>
-                <li>Không lặp lại cùng nguồn và topic vừa dùng.</li>
-                <li>Ưu tiên xoay vòng nguồn nếu bạn chọn nhiều nơi.</li>
+                <li>Má»—i láº§n cháº¡y chá»‰ Ä‘Äƒng 1 bĂ i Ä‘á»ƒ giá»¯ cháº¥t lÆ°á»£ng tá»‘t hÆ¡n.</li>
+                <li>KhĂ´ng láº·p tiĂªu Ä‘á» gáº§n Ä‘Ă¢y.</li>
+                <li>KhĂ´ng láº·p láº¡i cĂ¹ng nguá»“n vĂ  topic vá»«a dĂ¹ng.</li>
+                <li>Æ¯u tiĂªn xoay vĂ²ng nguá»“n náº¿u báº¡n chá»n nhiá»u nÆ¡i.</li>
               </ul>
               <div className="settings-quality-stats">
-                <Tag color="blue">Đã đăng: {postedCount}</Tag>
-                <Tag color="purple">Nguồn bật: {settings.sources.length}</Tag>
+                <Tag color="blue">ÄĂ£ Ä‘Äƒng: {postedCount}</Tag>
+                <Tag color="purple">Nguá»“n báº­t: {settings.sources.length}</Tag>
                 <Tag color="magenta">
                   {settings.scheduleMode === 'fixed_time'
                     ? `Top ${fixedTimeTopResultsCount} candidate`
-                    : '1 candidate mỗi chu kỳ'}
+                    : '1 candidate má»—i chu ká»³'}
                 </Tag>
               </div>
             </Card>
@@ -458,12 +473,12 @@ const Settings: React.FC = () => {
           >
             <div className="settings-card__header">
               <PlayCircle size={18} />
-              <Title level={3}>Xem trước và hành động</Title>
+              <Title level={3}>Xem trÆ°á»›c vĂ  hĂ nh Ä‘á»™ng</Title>
             </div>
             <Paragraph className="settings-muted">
               {settings.scheduleMode === 'fixed_time'
-                ? `Bạn có thể tạo top ${fixedTimeTopResultsCount} bài nháp để xem AI đang đánh giá gì là tốt nhất trước khi đăng.`
-                : 'Bạn có thể tạo 1 bài nháp cho chu kỳ hiện tại hoặc đăng thử ngay vào feed local.'}
+                ? `Báº¡n cĂ³ thá»ƒ táº¡o top ${fixedTimeTopResultsCount} bĂ i nhĂ¡p Ä‘á»ƒ xem AI Ä‘ang Ä‘Ă¡nh giĂ¡ gĂ¬ lĂ  tá»‘t nháº¥t trÆ°á»›c khi Ä‘Äƒng.`
+                : 'Báº¡n cĂ³ thá»ƒ táº¡o 1 bĂ i nhĂ¡p cho chu ká»³ hiá»‡n táº¡i hoáº·c Ä‘Äƒng thá»­ ngay vĂ o feed local.'}
             </Paragraph>
 
             <div className="settings-actions">
@@ -474,7 +489,7 @@ const Settings: React.FC = () => {
                 onClick={handleGeneratePreview}
                 disabled={!validation.ok}
               >
-                Tạo bài nháp xem trước
+                Táº¡o bĂ i nhĂ¡p xem trÆ°á»›c
               </Button>
               <Button
                 type="primary"
@@ -483,10 +498,10 @@ const Settings: React.FC = () => {
                 onClick={handlePostNow}
                 disabled={!validation.ok}
               >
-                Đăng thử ngay
+                ÄÄƒng thá»­ ngay
               </Button>
               <Button type="text" size="large" icon={<Save size={16} />} onClick={handleSaveSettings}>
-                Lưu cài đặt
+                LÆ°u cĂ i Ä‘áº·t
               </Button>
             </div>
 
@@ -504,11 +519,11 @@ const Settings: React.FC = () => {
                     >
                       <div className="preview-post__meta">
                         <Tag color={index === 0 ? 'geekblue' : 'magenta'}>
-                          {settings.scheduleMode === 'fixed_time' ? `Top ${index + 1}` : 'Candidate hiện tại'}
+                          {settings.scheduleMode === 'fixed_time' ? `Top ${index + 1}` : 'Candidate hiá»‡n táº¡i'}
                         </Tag>
-                        <Tag color="purple">{automationSourceLabels[preview.source]}</Tag>
+                        <Tag color="purple">{automationSourceLabels[preview.source as TrendSource]}</Tag>
                         <Tag color="cyan">{preview.category}</Tag>
-                        {preview.posted && <Tag color="green">Đã đưa vào feed</Tag>}
+                        {preview.posted && <Tag color="green">ÄĂ£ Ä‘Æ°a vĂ o feed</Tag>}
                       </div>
                       <Title level={4}>{preview.title}</Title>
                       <Paragraph>{preview.content}</Paragraph>
@@ -518,7 +533,7 @@ const Settings: React.FC = () => {
               ) : (
                 <div className="preview-empty">
                   <Sparkles size={18} />
-                  <span>Chưa có bài nháp nào. Hãy tạo preview để xem AI sẽ viết gì cho bạn.</span>
+                  <span>ChÆ°a cĂ³ bĂ i nhĂ¡p nĂ o. HĂ£y táº¡o preview Ä‘á»ƒ xem AI sáº½ viáº¿t gĂ¬ cho báº¡n.</span>
                 </div>
               )}
             </div>

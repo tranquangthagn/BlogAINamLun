@@ -25,7 +25,8 @@ import {
   SkinOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { Post } from '../data/mockData';
+import { markPostRead, savePost, unsavePost } from '../api/archive';
+import type { Post } from '../data/mockData';
 
 const { Text, Paragraph } = Typography;
 
@@ -43,35 +44,33 @@ const categoryMeta: Record<
     icon: React.ReactNode;
   }
 > = {
-  fashion: { label: 'Thời trang', colorClass: 'fashion', icon: <SkinOutlined /> },
-  health: { label: 'Sức khỏe', colorClass: 'health', icon: <HeartOutlined /> },
-  tips: { label: 'Mẹo Vặt', colorClass: 'tips', icon: <CalendarOutlined /> },
+  fashion: { label: 'Thá»i trang', colorClass: 'fashion', icon: <SkinOutlined /> },
+  health: { label: 'Sá»©c khá»e', colorClass: 'health', icon: <HeartOutlined /> },
+  tips: { label: 'Máº¹o Váº·t', colorClass: 'tips', icon: <CalendarOutlined /> },
   general: { label: 'Chung', colorClass: 'general', icon: <CalendarOutlined /> },
 };
 
 const PostCard: React.FC<PostCardProps> = ({ post, isArchivePage = false, isRead = false }) => {
   const handleCopy = () => {
     navigator.clipboard.writeText(post.content);
-    message.success('Đã sao chép nội dung rồi ạ! ✨');
+    message.success('ÄĂ£ sao chĂ©p ná»™i dung rá»“i áº¡! âœ¨');
   };
 
-  const handleReadToggle = (e: React.MouseEvent) => {
+  const handleReadToggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const readRaw = localStorage.getItem('blog-read-posts');
-    let readIds: number[] = readRaw ? JSON.parse(readRaw) : [];
 
     if (isRead) {
-      readIds = readIds.filter((id) => id !== post.id);
-      message.info('Đã đánh dấu bài này là chưa đọc ạ! 📝');
-    } else {
-      if (!readIds.includes(post.id)) {
-        readIds.push(post.id);
-      }
-      message.success('Bẩm cậu Chủ, con đã ghi nhận bài này đã đọc rồi ạ! ✅');
+      message.info('BĂ i nĂ y Ä‘Ă£ Ä‘Æ°á»£c Ä‘Ă¡nh dáº¥u Ä‘Ă£ Ä‘á»c rá»“i áº¡! âœ…');
+      return;
     }
 
-    localStorage.setItem('blog-read-posts', JSON.stringify(readIds));
-    window.dispatchEvent(new Event('blog-read-updated'));
+    try {
+      await markPostRead(post.id);
+      message.success('Báº©m cáº­u Chá»§, con Ä‘Ă£ ghi nháº­n bĂ i nĂ y Ä‘Ă£ Ä‘á»c rá»“i áº¡! âœ…');
+      window.dispatchEvent(new Event('blog-read-updated'));
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : 'ChÆ°a thá»ƒ Ä‘Ă¡nh dáº¥u Ä‘Ă£ Ä‘á»c.');
+    }
   };
 
   const downloadImage = async (url: string, filename: string) => {
@@ -101,11 +100,11 @@ const PostCard: React.FC<PostCardProps> = ({ post, isArchivePage = false, isRead
 
   const handleDownloadAll = async () => {
     if (!post.images || post.images.length === 0) {
-      message.warning('Bài viết này không có ảnh để tải ạ! 😅');
+      message.warning('BĂ i viáº¿t nĂ y khĂ´ng cĂ³ áº£nh Ä‘á»ƒ táº£i áº¡! đŸ˜…');
       return;
     }
 
-    message.loading({ content: 'Đang tải ảnh về máy cậu Chủ... 📥', key: 'downloading' });
+    message.loading({ content: 'Äang táº£i áº£nh vá» mĂ¡y cáº­u Chá»§... đŸ“¥', key: 'downloading' });
     for (let index = 0; index < post.images.length; index += 1) {
       const url = post.images[index];
       const filename = `BlogAINamLun_${post.id}_${index + 1}.jpg`;
@@ -116,29 +115,24 @@ const PostCard: React.FC<PostCardProps> = ({ post, isArchivePage = false, isRead
       }
     }
 
-    message.success({ content: 'Đã tải xong toàn bộ ảnh rồi ạ! ✨', key: 'downloading' });
+    message.success({ content: 'ÄĂ£ táº£i xong toĂ n bá»™ áº£nh rá»“i áº¡! âœ¨', key: 'downloading' });
   };
 
-  const handleSaveToggle = () => {
-    const savedRaw = localStorage.getItem('blog-saved-posts');
-    let saved: Post[] = savedRaw ? JSON.parse(savedRaw) : [];
+  const handleSaveToggle = async () => {
+    try {
+      if (isArchivePage) {
+        await unsavePost(post.id);
+        message.success('ÄĂ£ dá»n dáº¹p bĂ i nĂ y khá»i kho lÆ°u trá»¯ rá»“i áº¡! đŸ§¹');
+        window.dispatchEvent(new Event('blog-archive-updated'));
+        return;
+      }
 
-    if (isArchivePage) {
-      saved = saved.filter((item) => item.id !== post.id);
-      localStorage.setItem('blog-saved-posts', JSON.stringify(saved));
-      message.success('Đã dọn dẹp bài này khỏi kho lưu trữ rồi ạ! 🧹');
+      await savePost(post.id);
+      message.success('ÄĂ£ cáº¥t bĂ i viáº¿t vĂ o kho bĂ¡u rá»“i áº¡! đŸ’¾âœ¨');
       window.dispatchEvent(new Event('blog-archive-updated'));
-      return;
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : 'ChÆ°a thá»ƒ cáº­p nháº­t kho lÆ°u trá»¯.');
     }
-
-    if (saved.find((item) => item.id === post.id)) {
-      message.warning('Bẩm cậu Chủ, bài này đã có trong kho rồi ạ! 💎');
-      return;
-    }
-
-    saved.unshift(post);
-    localStorage.setItem('blog-saved-posts', JSON.stringify(saved));
-    message.success('Đã cất bài viết vào kho báu rồi ạ! 💾✨');
   };
 
   const getCategoryTag = () => {
@@ -260,18 +254,19 @@ const PostCard: React.FC<PostCardProps> = ({ post, isArchivePage = false, isRead
                   {isRead ? <CheckCircleOutlined className="editorial-post-card__read-icon" /> : null}
                 </div>
                 <Text type="secondary" className="editorial-post-card__time">
-                  {post.time} • ◔
+                  {post.time} â€¢ â—”
                 </Text>
               </div>
             </Space>
 
             <Space size="small" className="editorial-post-card__meta">
-              <Tooltip title={isRead ? 'Đánh dấu là chưa đọc' : 'Đánh dấu đã đọc'}>
+              <Tooltip title={isRead ? 'ÄĂ£ Ä‘Ă¡nh dáº¥u Ä‘Ă£ Ä‘á»c' : 'ÄĂ¡nh dáº¥u Ä‘Ă£ Ä‘á»c'}>
                 <Button
                   type="text"
                   className="editorial-post-card__read-toggle"
                   icon={isRead ? <EyeOutlined /> : <CheckCircleOutlined />}
                   onClick={handleReadToggle}
+                  disabled={isRead}
                 />
               </Tooltip>
               {getCategoryTag()}
@@ -284,7 +279,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, isArchivePage = false, isRead
 
           <div className="editorial-post-card__actions">
             <Space size="middle" wrap>
-              <Tooltip title={isArchivePage ? 'Bỏ lưu trữ' : 'Lưu bài viết'}>
+              <Tooltip title={isArchivePage ? 'Bá» lÆ°u trá»¯' : 'LÆ°u bĂ i viáº¿t'}>
                 <Button
                   type="text"
                   danger={isArchivePage}
@@ -298,30 +293,30 @@ const PostCard: React.FC<PostCardProps> = ({ post, isArchivePage = false, isRead
                   }
                   onClick={handleSaveToggle}
                 >
-                  {isArchivePage ? 'Bỏ lưu' : 'Lưu trữ'}
+                  {isArchivePage ? 'Bá» lÆ°u' : 'LÆ°u trá»¯'}
                 </Button>
               </Tooltip>
 
-              <Tooltip title="Tải ảnh về máy">
+              <Tooltip title="Táº£i áº£nh vá» mĂ¡y">
                 <Button
                   type="text"
                   className="editorial-post-card__action-btn"
                   icon={<DownloadOutlined />}
                   onClick={handleDownloadAll}
                 >
-                  Tải ảnh ({post.images?.length || 0})
+                  Táº£i áº£nh ({post.images?.length || 0})
                 </Button>
               </Tooltip>
             </Space>
 
-            <Tooltip title="Sao chép văn bản">
+            <Tooltip title="Sao chĂ©p vÄƒn báº£n">
               <Button
                 type="default"
                 className="editorial-post-card__copy-btn"
                 icon={<CopyOutlined />}
                 onClick={handleCopy}
               >
-                Sao chép
+                Sao chĂ©p
               </Button>
             </Tooltip>
           </div>
