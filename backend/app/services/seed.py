@@ -9,9 +9,9 @@ from app.repositories.posts import PostsRepository
 
 SEED_POSTS = [
     {
-        "author": "Cau Chu",
+        "author": "Cậu Chủ",
         "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
-        "content": "Bo suu tap thoi trang mua he nam nay that su an tuong voi nhung gam mau pastel nhe nhang. #Fashion #Summer",
+        "content": "Bộ sưu tập thời trang mùa hè năm nay thật sự ấn tượng với những gam màu pastel nhẹ nhàng. #Fashion #Summer",
         "category": "fashion",
         "likes": 42,
         "comments": 0,
@@ -22,9 +22,9 @@ SEED_POSTS = [
         ],
     },
     {
-        "author": "Cau Chu",
+        "author": "Cậu Chủ",
         "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
-        "content": "Album anh di du lich tuan truoc cua minh ne. Co tan 8 tam anh lan, nhan vao xem cho da mat nhe!",
+        "content": "Album ảnh đi du lịch tuần trước của mình nè. Có tận 8 tấm ảnh lận, nhấn vào xem cho đã mắt nhé!",
         "category": "general",
         "likes": 250,
         "comments": 0,
@@ -36,9 +36,9 @@ SEED_POSTS = [
         ],
     },
     {
-        "author": "Nam Lun AI",
+        "author": "Nấm Lùn AI",
         "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Robo",
-        "content": "Uong du 2 lit nuoc moi ngay giup lan da luon cang mong va co the tran day nang luong. #Health #Wellness",
+        "content": "Uống đủ 2 lít nước mỗi ngày giúp làn da luôn căng mọng và cơ thể tràn đầy năng lượng. #Health #Wellness",
         "category": "health",
         "likes": 128,
         "comments": 0,
@@ -48,9 +48,9 @@ SEED_POSTS = [
         ],
     },
     {
-        "author": "Meo Vat AI",
+        "author": "Mẹo Vặt AI",
         "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Idea",
-        "content": "Meo nho giup ban phim luon sach bong: dung co trang diem cu hoac tam bong tham it con de ve sinh cac ke phim nhe!",
+        "content": "Mẹo nhỏ giúp bàn phím luôn sạch bóng: dùng cọ trang điểm cũ hoặc tăm bông thấm ít cồn để vệ sinh các kẽ phím nhé!",
         "category": "tips",
         "likes": 56,
         "comments": 0,
@@ -63,24 +63,41 @@ SEED_POSTS = [
 ]
 
 
-def ensure_seed_data(session: Session) -> None:
-    repository = PostsRepository(session)
-    if repository.count_posts() > 0:
-        return
+def sync_seed_post(post: Post, seed: dict) -> None:
+    post.author = seed["author"]
+    post.avatar = seed["avatar"]
+    post.content = seed["content"]
+    post.category = seed["category"]
+    post.created_at = seed["created_at"]
+    post.likes = seed["likes"]
+    post.comments = seed["comments"]
+    post.source_type = "seeded"
 
-    for seed in SEED_POSTS:
-        post = Post(
-            author=seed["author"],
-            avatar=seed["avatar"],
-            content=seed["content"],
-            category=seed["category"],
-            created_at=seed["created_at"],
-            likes=seed["likes"],
-            comments=seed["comments"],
-            source_type="seeded",
-        )
+    existing_images = sorted(post.images, key=lambda image: image.position)
+    if len(existing_images) != len(seed["images"]):
+        post.images.clear()
         for index, image_url in enumerate(seed["images"]):
             post.images.append(PostImage(image_url=image_url, position=index))
-        repository.add_post(post)
+        return
+
+    for index, image_url in enumerate(seed["images"]):
+        existing_images[index].image_url = image_url
+        existing_images[index].position = index
+
+
+def ensure_seed_data(session: Session) -> None:
+    repository = PostsRepository(session)
+    existing_seed_posts = {
+        post.created_at: post
+        for post in repository.list_posts()
+        if post.source_type == "seeded"
+    }
+
+    for seed in SEED_POSTS:
+        post = existing_seed_posts.get(seed["created_at"])
+        if post is None:
+            post = Post(source_type="seeded")
+            repository.add_post(post)
+        sync_seed_post(post, seed)
 
     session.commit()

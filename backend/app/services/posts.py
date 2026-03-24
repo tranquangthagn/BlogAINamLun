@@ -12,14 +12,14 @@ def format_time_since(value: datetime, now: datetime | None = None) -> str:
     current = now or datetime.now()
     diff_minutes = max(1, int((current - value).total_seconds() // 60))
     if diff_minutes < 60:
-        return f"{diff_minutes} phut truoc"
+        return f"{diff_minutes} phút trước"
 
     diff_hours = diff_minutes // 60
     if diff_hours < 24:
-        return f"{diff_hours} gio truoc"
+        return f"{diff_hours} giờ trước"
 
     diff_days = diff_hours // 24
-    return f"{diff_days} ngay truoc"
+    return f"{diff_days} ngày trước"
 
 
 class PostsService:

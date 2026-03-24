@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     enable_scheduler: bool = True
     api_v1_prefix: str = "/api"
     cors_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["http://localhost:5173"]
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
     )
 
     model_config = SettingsConfigDict(
