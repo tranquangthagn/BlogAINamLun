@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache/
 .mysql-dev/
 backend/.env
+.run/
