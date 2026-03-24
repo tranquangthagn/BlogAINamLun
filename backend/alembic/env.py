@@ -5,10 +5,12 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.core.database import Base
+from app.core.database import configure_database_runtime
 from app.models import *  # noqa: F403
 
 
 config = context.config
+configure_database_runtime()
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
 

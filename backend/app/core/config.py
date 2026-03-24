@@ -1,7 +1,10 @@
+from typing import Annotated
+
 from functools import lru_cache
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -9,7 +12,9 @@ class Settings(BaseSettings):
     database_url: str = "mysql+pymysql://root:root@localhost:3306/blog_ai_nam_lun"
     enable_scheduler: bool = True
     api_v1_prefix: str = "/api"
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -17,6 +22,13 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value):
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
 
 @lru_cache(maxsize=1)
