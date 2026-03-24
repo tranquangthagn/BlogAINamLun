@@ -24,9 +24,9 @@ const { Title, Paragraph } = Typography;
 const AUTOMATION_EVENT = 'blog-ai-automation-updated';
 
 const rangePresets: { label: string; value: [dayjs.Dayjs, dayjs.Dayjs] }[] = [
-  { label: 'HĂ´m nay', value: [dayjs(), dayjs()] },
-  { label: '7 ngĂ y qua', value: [dayjs().subtract(7, 'd'), dayjs()] },
-  { label: 'ThĂ¡ng nĂ y', value: [dayjs().startOf('month'), dayjs().endOf('month')] },
+  { label: 'Hôm nay', value: [dayjs(), dayjs()] },
+  { label: '7 ngày qua', value: [dayjs().subtract(7, 'd'), dayjs()] },
+  { label: 'Tháng này', value: [dayjs().startOf('month'), dayjs().endOf('month')] },
 ];
 
 const Archive: React.FC = () => {
@@ -93,11 +93,11 @@ const Archive: React.FC = () => {
   const emptyText =
     archiveTab === 'saved'
       ? savedPosts.length === 0
-        ? 'Kho bĂ¡u hiá»‡n cĂ²n trá»‘ng, nhÆ°ng nÆ¡i nĂ y sáº½ Ä‘áº¹p lĂªn ngay khi cáº­u báº¯t Ä‘áº§u lÆ°u láº¡i nhá»¯ng Ä‘iá»u mĂ¬nh thĂ­ch.'
-        : 'ChÆ°a cĂ³ bĂ i lÆ°u trá»¯ nĂ o khá»›p vá»›i bá»™ lá»c hiá»‡n táº¡i.'
+        ? 'Kho báu hiện còn trống, nhưng nơi này sẽ đẹp lên ngay khi cậu bắt đầu lưu lại những điều mình thích.'
+        : 'Chưa có bài lưu trữ nào khớp với bộ lọc hiện tại.'
       : readPosts.length === 0
-        ? 'Dáº¥u chĂ¢n Ä‘á»c váº«n cĂ²n yĂªn áº¯ng. Khi cáº­u má»Ÿ vĂ  Ä‘Ă¡nh dáº¥u bĂ i viáº¿t, nÆ¡i nĂ y sáº½ lÆ°u láº¡i nhá»‹p Ä‘á»c ráº¥t riĂªng.'
-        : 'ChÆ°a cĂ³ bĂ i Ä‘Ă£ Ä‘á»c nĂ o khá»›p vá»›i bá»™ lá»c hiá»‡n táº¡i.';
+        ? 'Dấu chân đọc vẫn còn yên ắng. Khi cậu mở và đánh dấu bài viết, nơi này sẽ lưu lại nhịp đọc rất riêng.'
+        : 'Chưa có bài đã đọc nào khớp với bộ lọc hiện tại.';
 
   return (
     <ConfigProvider
@@ -115,11 +115,11 @@ const Archive: React.FC = () => {
           <div className="editorial-archive-hero__copy">
             <span className="editorial-archive-hero__eyebrow">personal memory vault</span>
             <Title level={2} className="editorial-archive-hero__title">
-              Kho LÆ°u Trá»¯ Cá»§a Cáº­u Chá»§
+              Kho Lưu Trữ Của Cậu Chủ
             </Title>
             <Paragraph className="editorial-archive-hero__text">
-              NÆ¡i nhá»¯ng bĂ i viáº¿t yĂªu thĂ­ch, dáº¥u chĂ¢n Ä‘á»c vĂ  nhá»¯ng máº£nh cáº£m há»©ng Ä‘Æ°á»£c cáº¥t láº¡i
-              má»™t cĂ¡ch nháº¹ nhĂ ng, Ä‘áº¹p máº¯t vĂ  dá»… tĂ¬m.
+              Nơi những bài viết yêu thích, dấu chân đọc và những mảnh cảm hứng được cất lại
+              một cách nhẹ nhàng, đẹp mắt và dễ tìm.
             </Paragraph>
           </div>
 
@@ -128,8 +128,8 @@ const Archive: React.FC = () => {
               size="large"
               className="editorial-archive-tabs__segmented"
               options={[
-                { label: 'Kho bĂ¡u', value: 'saved', icon: <StarOutlined /> },
-                { label: 'Dáº¥u chĂ¢n', value: 'read', icon: <HistoryOutlined /> },
+                { label: 'Kho báu', value: 'saved', icon: <StarOutlined /> },
+                { label: 'Dấu chân', value: 'read', icon: <HistoryOutlined /> },
               ]}
               value={archiveTab}
               onChange={(value) => setArchiveTab(value as string)}
@@ -144,7 +144,7 @@ const Archive: React.FC = () => {
                 className="editorial-range-picker"
                 presets={rangePresets as never}
                 suffixIcon={<CalendarOutlined />}
-                placeholder={['Tá»« ngĂ y', 'Äáº¿n ngĂ y']}
+                placeholder={['Từ ngày', 'Đến ngày']}
                 onChange={(values) =>
                   setDateRange(values as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)
                 }
@@ -154,10 +154,10 @@ const Archive: React.FC = () => {
               <Segmented
                 className="editorial-category-segmented"
                 options={[
-                  { label: 'Táº¥t cáº£', value: 'all', icon: <AppstoreOutlined /> },
-                  { label: 'Thá»i trang', value: 'fashion', icon: <SkinOutlined /> },
-                  { label: 'Sá»©c khá»e', value: 'health', icon: <HeartOutlined /> },
-                  { label: 'Máº¹o Váº·t', value: 'tips', icon: <BulbOutlined /> },
+                  { label: 'Tất cả', value: 'all', icon: <AppstoreOutlined /> },
+                  { label: 'Thời trang', value: 'fashion', icon: <SkinOutlined /> },
+                  { label: 'Sức khỏe', value: 'health', icon: <HeartOutlined /> },
+                  { label: 'Mẹo Vặt', value: 'tips', icon: <BulbOutlined /> },
                 ]}
                 value={selectedCategory}
                 onChange={setSelectedCategory}
@@ -183,7 +183,7 @@ const Archive: React.FC = () => {
                   image={<InboxOutlined className="editorial-archive-empty__icon" />}
                   description={
                     <div className="editorial-archive-empty__content">
-                      <strong>{archiveTab === 'saved' ? 'Kho bĂ¡u Ä‘ang nghá»‰ ngÆ¡i' : 'Dáº¥u chĂ¢n cĂ²n yĂªn áº¯ng'}</strong>
+                      <strong>{archiveTab === 'saved' ? 'Kho báu đang nghỉ ngơi' : 'Dấu chân còn yên ắng'}</strong>
                       <span>{emptyText}</span>
                     </div>
                   }
