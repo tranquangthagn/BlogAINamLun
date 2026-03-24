@@ -431,6 +431,19 @@ The system setup should include:
 
 This is enough operational structure to make the project reproducible and easier to deploy later without forcing full production platform complexity today.
 
+## Local Runbook Notes
+
+The first local run path should be straightforward:
+
+- copy `backend/.env.example` to `backend/.env`
+- start MySQL and backend together through `docker-compose.yml` when local MySQL credentials are unknown or inconsistent
+- run Alembic migrations before relying on API data
+- verify `GET /health`
+- verify `GET /api/posts`
+- verify `PUT /api/automation/settings` and `POST /api/automation/preview`
+
+This runbook exists to reduce ambiguity between schema setup, seed behavior, and application startup.
+
 ## Technical Intent
 
 This work should not attempt to solve everything at once.

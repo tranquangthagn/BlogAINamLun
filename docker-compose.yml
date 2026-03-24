@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: blog-ai-nam-lun-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: blog_ai_nam_lun
+      MYSQL_USER: blogai
+      MYSQL_PASSWORD: blogai
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - blog_ai_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: blog-ai-nam-lun-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: BlogAINamLun API
+      DATABASE_URL: mysql+pymysql://blogai:blogai@db:3306/blog_ai_nam_lun
+      ENABLE_SCHEDULER: "true"
+      API_V1_PREFIX: /api
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+volumes:
+  blog_ai_mysql_data:
