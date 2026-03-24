@@ -110,7 +110,7 @@ This domain exists to make the application operable in development and deployabl
 
 ## Data Model
 
-The backend should introduce persistent relational storage with PostgreSQL as the source of truth.
+The backend should introduce persistent relational storage with MySQL as the source of truth.
 
 ### `posts`
 
@@ -192,6 +192,117 @@ Recommended fields:
 - `published_post_id`
 
 This table tracks what the automation considered and what eventually became visible in the feed.
+
+## Database Flow
+
+The database layer should be treated as a first-class part of the system design rather than an implementation detail.
+
+### Storage Direction
+
+MySQL should be the primary operational database for this phase.
+
+The backend should connect to MySQL through a structured persistence layer:
+
+- API routes receive validated HTTP input
+- services apply product rules and orchestration
+- repositories execute database reads and writes
+- ORM models map domain entities to MySQL tables
+
+This keeps HTTP concerns, business behavior, and persistence concerns separate.
+
+### Schema Lifecycle
+
+Schema changes should be managed through migrations rather than manual database edits.
+
+Required lifecycle:
+
+- define ORM models for each table
+- create versioned migrations for schema changes
+- apply migrations on local setup and deployment
+- keep schema history in the repository
+
+This allows the database to evolve safely as the backend grows.
+
+### Startup Flow
+
+When the backend starts:
+
+- load environment configuration
+- build the MySQL connection settings
+- initialize the database engine and session factory
+- verify connectivity
+- run application startup wiring
+- ensure seed initialization logic can run when the database is empty
+
+Startup should fail fast if the MySQL configuration is invalid or the database is unavailable.
+
+### Seed Flow
+
+The current frontend includes seeded post content in [mockData.ts](C:/Users/thang/MyProjects/BlogAINamLun/frontend/src/data/mockData.ts). The backend should preserve a similar first-run experience.
+
+Recommended seed flow:
+
+- detect whether the `posts` table is empty
+- insert initial seeded posts and related images
+- mark them as `source_type = seeded`
+- avoid duplicate inserts on later startups
+
+This gives the product a non-empty initial feed while still allowing database-backed persistence to become the source of truth.
+
+### Runtime Write Flow
+
+Normal writes should follow predictable transaction boundaries.
+
+Examples:
+
+- saving a post updates or creates the related `user_post_states` record
+- marking a post as read updates the same state table
+- posting an automation candidate creates or links a `posts` record and updates `automation_history`
+- automation scheduler runs should update `automation_settings.last_run_at` in the same logical workflow
+
+Operations that belong together should commit together so feed and automation state do not drift apart.
+
+### Read Flow
+
+Read APIs should assemble response data from MySQL in backend services rather than leaving the frontend to merge unrelated data sources.
+
+Examples:
+
+- feed queries should return posts ordered by `created_at`
+- archive queries should join post content with saved/read state
+- automation history queries should return candidate records in reverse chronological order
+
+This reduces duplicated data logic across frontend pages.
+
+### Automation Database Flow
+
+The automation loop should use the database as the durable record of both settings and outcomes.
+
+Expected flow:
+
+- read active automation settings from MySQL
+- read recent automation history from MySQL
+- generate candidates in the service layer
+- insert new candidate rows into `automation_history`
+- when publishing, create the feed post row and related images if needed
+- update the selected history row as `posted`
+- write the published post reference back to `automation_history`
+- update the settings row with the last successful run metadata
+
+This creates a full audit trail for previews, published automation output, and scheduling behavior.
+
+### Database Constraints
+
+The schema should include the minimum constraints needed to keep data trustworthy.
+
+Recommended examples:
+
+- foreign keys from `post_images` and `user_post_states` to `posts`
+- a foreign key from `automation_history.published_post_id` to `posts`
+- indexed timestamps for sorting recent posts and history
+- uniqueness rules where needed to prevent duplicate state rows per post
+
+Constraints should stay focused and practical for the current single-owner application.
 
 ## Core Data Principle
 
@@ -313,10 +424,10 @@ Tests should focus on service-level correctness first, then add route-level cove
 The system setup should include:
 
 - `.env`-driven configuration
-- database connection settings
+- MySQL connection settings
 - migration support
 - local development startup instructions
-- Docker support for app and database
+- Docker support for app and MySQL database
 
 This is enough operational structure to make the project reproducible and easier to deploy later without forcing full production platform complexity today.
 
