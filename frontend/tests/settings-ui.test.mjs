@@ -13,10 +13,14 @@ test('settings page file exists with key automation sections', () => {
   const expectedTexts = [
     'Tự động đăng bài',
     'Lịch đăng bài',
+    'Theo giờ cố định',
+    'Mấy phút một lần',
     'Nguồn trend',
     'Phạm vi dữ liệu',
     'Tạo bài nháp xem trước',
     'Đăng thử ngay',
+    'Tổng quan AI',
+    'Xem trước và hành động',
   ];
 
   for (const text of expectedTexts) {

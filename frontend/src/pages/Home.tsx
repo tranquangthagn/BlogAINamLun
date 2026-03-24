@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { DatePicker, Segmented, Space, Empty, ConfigProvider } from 'antd';
+import { ConfigProvider, DatePicker, Empty, Segmented, Space } from 'antd';
 import {
-  CalendarOutlined,
   AppstoreOutlined,
-  SkinOutlined,
-  HeartOutlined,
   BulbOutlined,
+  CalendarOutlined,
+  HeartOutlined,
+  SkinOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
@@ -30,19 +30,39 @@ const Home: React.FC = () => {
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | number>('all');
   const [generatedPosts, setGeneratedPosts] = useState<Post[]>([]);
+  const [readPostIds, setReadPostIds] = useState<number[]>([]);
 
   useEffect(() => {
     const syncGeneratedPosts = () => {
       setGeneratedPosts(loadGeneratedFeedPosts());
     };
 
+    const syncReadPosts = () => {
+      const readRaw = localStorage.getItem('blog-read-posts');
+      if (readRaw) {
+        setReadPostIds(JSON.parse(readRaw));
+        return;
+      }
+
+      setReadPostIds([]);
+    };
+
+    const handleStorage = () => {
+      syncGeneratedPosts();
+      syncReadPosts();
+    };
+
     syncGeneratedPosts();
+    syncReadPosts();
+
     window.addEventListener(AUTOMATION_EVENT, syncGeneratedPosts);
-    window.addEventListener('storage', syncGeneratedPosts);
+    window.addEventListener('blog-read-updated', syncReadPosts);
+    window.addEventListener('storage', handleStorage);
 
     return () => {
       window.removeEventListener(AUTOMATION_EVENT, syncGeneratedPosts);
-      window.removeEventListener('storage', syncGeneratedPosts);
+      window.removeEventListener('blog-read-updated', syncReadPosts);
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 
@@ -50,6 +70,10 @@ const Home: React.FC = () => {
 
   const filteredPosts = useMemo(() => {
     return feedPosts.filter((post) => {
+      if (readPostIds.includes(post.id)) {
+        return false;
+      }
+
       const matchesCategory = selectedCategory === 'all' || post.category === selectedCategory;
 
       let matchesDate = true;
@@ -60,61 +84,35 @@ const Home: React.FC = () => {
 
       return matchesCategory && matchesDate;
     });
-  }, [dateRange, feedPosts, selectedCategory]);
+  }, [dateRange, feedPosts, readPostIds, selectedCategory]);
 
   return (
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#1890ff',
-          borderRadius: 12,
+          colorPrimary: '#c37d9e',
+          borderRadius: 18,
+          colorText: '#56445f',
+          colorTextPlaceholder: '#b894a8',
         },
       }}
     >
-      <div
-        className="filter-wrapper"
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 1000,
-          padding: '16px 0',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
-          borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
-          transition: 'all 0.3s ease',
-        }}
-      >
-        <div
-          className="filter-container"
-          style={{
-            maxWidth: '1000px',
-            margin: '0 auto',
-            padding: '0 24px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '16px',
-          }}
-        >
-          <Space size="middle" wrap>
+      <div className="editorial-filter-rail">
+        <div className="editorial-filter-card">
+          <Space size="middle" wrap className="editorial-filter-card__content">
             <RangePicker
+              className="editorial-range-picker"
               presets={rangePresets as never}
-              suffixIcon={<CalendarOutlined style={{ color: '#1890ff' }} />}
+              suffixIcon={<CalendarOutlined />}
               placeholder={['Từ ngày', 'Đến ngày']}
-              style={{
-                borderRadius: '30px',
-                padding: '8px 20px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                border: '1px solid #eee',
-                background: '#fff',
-              }}
-              onChange={(values) => setDateRange(values as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
+              onChange={(values) =>
+                setDateRange(values as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)
+              }
               value={dateRange}
             />
 
             <Segmented
+              className="editorial-category-segmented"
               options={[
                 { label: 'Tất cả', value: 'all', icon: <AppstoreOutlined /> },
                 { label: 'Thời trang', value: 'fashion', icon: <SkinOutlined /> },
@@ -123,30 +121,26 @@ const Home: React.FC = () => {
               ]}
               value={selectedCategory}
               onChange={setSelectedCategory}
-              style={{
-                padding: '4px',
-                borderRadius: '30px',
-                background: 'rgba(0, 0, 0, 0.04)',
-                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
-              }}
             />
           </Space>
         </div>
       </div>
 
-      <div className="feed-container" style={{ maxWidth: '800px', margin: '40px auto', paddingBottom: '60px' }}>
+      <div className="editorial-feed">
         <AnimatePresence>
           {filteredPosts.length > 0 ? (
-            filteredPosts.map((post) => <PostCard key={post.id} post={post} />)
+            filteredPosts.map((post) => (
+              <PostCard key={post.id} post={post} isRead={readPostIds.includes(post.id)} />
+            ))
           ) : (
             <Empty
+              className="editorial-feed__empty"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
-                <div style={{ color: '#999', fontSize: '16px', marginTop: '10px' }}>
+                <div className="editorial-feed__empty-text">
                   Bẩm cậu Chủ, "vùng trời" này hiện chưa có bài viết nào ạ! 🔍
                 </div>
               }
-              style={{ marginTop: '100px' }}
             />
           )}
         </AnimatePresence>

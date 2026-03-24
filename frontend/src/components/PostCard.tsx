@@ -1,13 +1,29 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Card, Avatar, Typography, Space, Button, Tooltip, message, Tag, Image, Row, Col } from 'antd';
-import { 
-  SaveOutlined, 
-  DownloadOutlined, 
-  CopyOutlined,
-  UserOutlined,
+import {
+  Avatar,
+  Button,
+  Card,
+  Col,
+  Image,
+  Row,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from 'antd';
+import {
   CalendarOutlined,
-  DeleteOutlined
+  CheckCircleOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+  HeartOutlined,
+  SaveOutlined,
+  SkinOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
 import { Post } from '../data/mockData';
 
@@ -16,180 +32,299 @@ const { Text, Paragraph } = Typography;
 interface PostCardProps {
   post: Post;
   isArchivePage?: boolean;
+  isRead?: boolean;
 }
 
-const PostCard: React.FC<PostCardProps> = ({ post, isArchivePage = false }) => {
-  // Hàm sao chép nội dung bài viết
+const categoryMeta: Record<
+  Post['category'],
+  {
+    label: string;
+    colorClass: string;
+    icon: React.ReactNode;
+  }
+> = {
+  fashion: { label: 'Thời trang', colorClass: 'fashion', icon: <SkinOutlined /> },
+  health: { label: 'Sức khỏe', colorClass: 'health', icon: <HeartOutlined /> },
+  tips: { label: 'Mẹo Vặt', colorClass: 'tips', icon: <CalendarOutlined /> },
+  general: { label: 'Chung', colorClass: 'general', icon: <CalendarOutlined /> },
+};
+
+const PostCard: React.FC<PostCardProps> = ({ post, isArchivePage = false, isRead = false }) => {
   const handleCopy = () => {
     navigator.clipboard.writeText(post.content);
     message.success('Đã sao chép nội dung rồi ạ! ✨');
   };
 
-  // Hàm tải ảnh đơn giản, hiệu quả cho cả PC và Mobile
+  const handleReadToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const readRaw = localStorage.getItem('blog-read-posts');
+    let readIds: number[] = readRaw ? JSON.parse(readRaw) : [];
+
+    if (isRead) {
+      readIds = readIds.filter((id) => id !== post.id);
+      message.info('Đã đánh dấu bài này là chưa đọc ạ! 📝');
+    } else {
+      if (!readIds.includes(post.id)) {
+        readIds.push(post.id);
+      }
+      message.success('Bẩm cậu Chủ, con đã ghi nhận bài này đã đọc rồi ạ! ✅');
+    }
+
+    localStorage.setItem('blog-read-posts', JSON.stringify(readIds));
+    window.dispatchEvent(new Event('blog-read-updated'));
+  };
+
   const downloadImage = async (url: string, filename: string) => {
     try {
       const response = await fetch(url);
-      if (!response.ok) throw new Error();
+      if (!response.ok) {
+        throw new Error();
+      }
+
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
-      
       const link = document.createElement('a');
+
       link.href = blobUrl;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       setTimeout(() => window.URL.revokeObjectURL(blobUrl), 200);
       return true;
-    } catch (error) {
+    } catch {
       window.open(url, '_blank');
       return false;
     }
   };
 
   const handleDownloadAll = async () => {
-    if (post.images && post.images.length > 0) {
-      message.loading({ content: 'Đang tải ảnh về máy cậu Chủ... 📥', key: 'downloading' });
-      for (let i = 0; i < post.images.length; i++) {
-        const url = post.images[i];
-        const filename = `BlogAINamLun_${post.id}_${i + 1}.jpg`;
-        await downloadImage(url, filename);
-        if (post.images.length > 1) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-      }
-      message.success({ content: 'Đã tải xong toàn bộ ảnh rồi ạ! ✨', key: 'downloading' });
-    } else {
+    if (!post.images || post.images.length === 0) {
       message.warning('Bài viết này không có ảnh để tải ạ! 😅');
+      return;
     }
+
+    message.loading({ content: 'Đang tải ảnh về máy cậu Chủ... 📥', key: 'downloading' });
+    for (let index = 0; index < post.images.length; index += 1) {
+      const url = post.images[index];
+      const filename = `BlogAINamLun_${post.id}_${index + 1}.jpg`;
+      await downloadImage(url, filename);
+
+      if (post.images.length > 1) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    }
+
+    message.success({ content: 'Đã tải xong toàn bộ ảnh rồi ạ! ✨', key: 'downloading' });
   };
 
-  // Hàm xử lý Lưu trữ / Bỏ lưu trữ dùng LocalStorage
   const handleSaveToggle = () => {
     const savedRaw = localStorage.getItem('blog-saved-posts');
     let saved: Post[] = savedRaw ? JSON.parse(savedRaw) : [];
 
     if (isArchivePage) {
-      // Logic Bỏ lưu
-      saved = saved.filter(p => p.id !== post.id);
+      saved = saved.filter((item) => item.id !== post.id);
       localStorage.setItem('blog-saved-posts', JSON.stringify(saved));
       message.success('Đã dọn dẹp bài này khỏi kho lưu trữ rồi ạ! 🧹');
-      // Phát sự kiện để trang Archive.tsx biết mà load lại
       window.dispatchEvent(new Event('blog-archive-updated'));
-    } else {
-      // Logic Lưu mới
-      if (saved.find(p => p.id === post.id)) {
-        message.warning('Bẩm cậu Chủ, bài này đã có trong kho rồi ạ! 💎');
-      } else {
-        saved.unshift(post); // Cho lên đầu danh sách
-        localStorage.setItem('blog-saved-posts', JSON.stringify(saved));
-        message.success('Đã cất bài viết vào kho báu rồi ạ! 💾✨');
-      }
+      return;
     }
+
+    if (saved.find((item) => item.id === post.id)) {
+      message.warning('Bẩm cậu Chủ, bài này đã có trong kho rồi ạ! 💎');
+      return;
+    }
+
+    saved.unshift(post);
+    localStorage.setItem('blog-saved-posts', JSON.stringify(saved));
+    message.success('Đã cất bài viết vào kho báu rồi ạ! 💾✨');
   };
 
-  const getCategoryTag = (category: string) => {
-    switch (category) {
-      case 'fashion': return <Tag color="magenta" icon={<CalendarOutlined />}>Thời trang</Tag>;
-      case 'health': return <Tag color="green" icon={<CalendarOutlined />}>Sức khỏe</Tag>;
-      case 'tips': return <Tag color="gold" icon={<CalendarOutlined />}>Mẹo Vặt</Tag>;
-      default: return <Tag color="blue" icon={<CalendarOutlined />}>Chung</Tag>;
-    }
+  const getCategoryTag = () => {
+    const meta = categoryMeta[post.category] ?? categoryMeta.general;
+
+    return (
+      <Tag className={`editorial-post-tag editorial-post-tag--${meta.colorClass}`} icon={meta.icon}>
+        {meta.label}
+      </Tag>
+    );
   };
 
-  const renderFacebookLayout = (images: string[]) => {
+  const renderImage = (src: string, index: number, height: number, overlayText?: string) => (
+    <div className="editorial-media-grid__cell" key={`${src}-${index}`}>
+      <Image
+        src={src}
+        alt={`${post.author}-${index + 1}`}
+        className="editorial-media-grid__image"
+        style={{ height }}
+      />
+      {overlayText ? <div className="editorial-media-grid__overlay">{overlayText}</div> : null}
+    </div>
+  );
+
+  const renderMediaGrid = (images: string[]) => {
     const count = images.length;
-    if (count === 0) return null;
+    if (count === 0) {
+      return null;
+    }
+
+    if (count === 1) {
+      return <div className="editorial-media-grid editorial-media-grid--single">{renderImage(images[0], 0, 430)}</div>;
+    }
+
+    if (count === 2) {
+      return (
+        <div className="editorial-media-grid editorial-media-grid--duo">
+          {images.slice(0, 2).map((image, index) => renderImage(image, index, 350))}
+        </div>
+      );
+    }
+
     const displayImages = images.slice(0, 5);
     const remainingCount = count - 5;
 
     return (
-      <div style={{ margin: '16px -24px', backgroundColor: '#f0f2f5', overflow: 'hidden' }}>
+      <div className="editorial-media-grid editorial-media-grid--mosaic">
         <Image.PreviewGroup>
-          {count === 1 && <Image src={images[0]} style={{ width: '100%', maxHeight: '500px', objectFit: 'cover', display: 'block' }} />}
-          {count === 2 && (
-            <Row gutter={[2, 2]}>
-              {displayImages.map((img, i) => (
-                <Col span={12} key={i}><Image src={img} style={{ width: '100%', height: '350px', objectFit: 'cover', display: 'block' }} /></Col>
-              ))}
-            </Row>
-          )}
-          {count === 3 && (
-            <Row gutter={[2, 2]}>
-              <Col span={16}><Image src={images[0]} style={{ width: '100%', height: '400px', objectFit: 'cover', display: 'block' }} /></Col>
-              <Col span={8}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <Image src={images[1]} style={{ width: '100%', height: '199px', objectFit: 'cover', display: 'block' }} />
-                  <Image src={images[2]} style={{ width: '100%', height: '199px', objectFit: 'cover', display: 'block' }} />
+          <Row gutter={[8, 8]}>
+            <Col span={count === 3 ? 15 : 24}>
+              {renderImage(displayImages[0], 0, count === 3 ? 360 : 280)}
+            </Col>
+            {count === 3 ? (
+              <Col span={9}>
+                <div className="editorial-media-grid editorial-media-grid--stack">
+                  {displayImages.slice(1, 3).map((image, index) => renderImage(image, index + 1, 176))}
                 </div>
               </Col>
-            </Row>
-          )}
-          {count === 4 && (
-            <Row gutter={[2, 2]}>
-              <Col span={24}><Image src={images[0]} style={{ width: '100%', height: '300px', objectFit: 'cover', display: 'block' }} /></Col>
-              {images.slice(1, 4).map((img, i) => (
-                <Col span={8} key={i}><Image src={img} style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} /></Col>
-              ))}
-            </Row>
-          )}
-          {count >= 5 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <Row gutter={[2, 2]}>
-                <Col span={12}><Image src={images[0]} style={{ width: '100%', height: '250px', objectFit: 'cover', display: 'block' }} /></Col>
-                <Col span={12}><Image src={images[1]} style={{ width: '100%', height: '250px', objectFit: 'cover', display: 'block' }} /></Col>
-              </Row>
-              <Row gutter={[2, 2]}>
-                <Col span={8}><Image src={images[2]} style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }} /></Col>
-                <Col span={8}><Image src={images[3]} style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }} /></Col>
-                <Col span={8} style={{ position: 'relative' }}>
-                  <Image src={images[4]} style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }} />
-                  {remainingCount > 0 && (
-                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '24px', fontWeight: 'bold', pointerEvents: 'none', zIndex: 1 }}>
-                      +{remainingCount}
-                    </div>
-                  )}
+            ) : null}
+            {count === 4 ? (
+              displayImages.slice(1, 4).map((image, index) => (
+                <Col span={8} key={`${image}-${index + 1}`}>
+                  {renderImage(image, index + 1, 170)}
                 </Col>
-              </Row>
-            </div>
-          )}
-          <div style={{ display: 'none' }}>{images.slice(5).map((img, i) => <Image key={i} src={img} />)}</div>
+              ))
+            ) : null}
+            {count >= 5 ? (
+              <>
+                {displayImages.slice(1, 5).map((image, index) => (
+                  <Col span={6} key={`${image}-${index + 1}`}>
+                    {renderImage(
+                      image,
+                      index + 1,
+                      168,
+                      index === 3 && remainingCount > 0 ? `+${remainingCount}` : undefined,
+                    )}
+                  </Col>
+                ))}
+              </>
+            ) : null}
+          </Row>
+          <div className="editorial-media-grid__hidden">
+            {images.slice(5).map((image, index) => (
+              <Image key={`${image}-${index + 5}`} src={image} alt={`${post.author}-hidden-${index + 1}`} />
+            ))}
+          </div>
         </Image.PreviewGroup>
       </div>
     );
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} style={{ marginBottom: '32px' }}>
-      <Card hoverable style={{ borderRadius: '20px', overflow: 'hidden', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 15px rgba(0,0,0,0.04)', background: '#fff' }} bodyStyle={{ padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-          <Space size="middle">
-            <Avatar src={post.avatar} size={54} icon={<UserOutlined />} style={{ border: '2px solid #f0f2f5' }} />
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <Text strong style={{ fontSize: '17px', color: '#1a1a1a' }}>{post.author}</Text>
-              <Text type="secondary" style={{ fontSize: '13px' }}>{post.time} • 🕒</Text>
-            </div>
-          </Space>
-          {getCategoryTag(post.category)}
-        </div>
-        <Paragraph style={{ fontSize: '16px', color: '#444', lineHeight: '1.7', marginBottom: '16px', whiteSpace: 'pre-wrap' }}>{post.content}</Paragraph>
-        {renderFacebookLayout(post.images || [])}
-        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f5f5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Space size="large">
-            <Tooltip title={isArchivePage ? "Bỏ lưu trữ" : "Lưu bài viết"}>
-              <Button 
-                type="text" 
-                danger={isArchivePage}
-                icon={isArchivePage ? <DeleteOutlined /> : <SaveOutlined style={{ fontSize: '20px' }} />} 
-                onClick={handleSaveToggle}
+    <motion.div
+      className="editorial-post-card-shell"
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.42 }}
+    >
+      <Card
+        hoverable
+        className={`editorial-post-card ${isRead ? 'is-read' : ''}`}
+        bodyStyle={{ padding: 0 }}
+      >
+        <div className="editorial-post-card__body">
+          <div className="editorial-post-card__header">
+            <Space size="middle" className="editorial-post-card__author">
+              <Avatar
+                src={post.avatar}
+                size={58}
+                icon={<UserOutlined />}
+                className="editorial-post-card__avatar"
+              />
+              <div className="editorial-post-card__author-copy">
+                <div className="editorial-post-card__author-line">
+                  <Text strong className="editorial-post-card__author-name">
+                    {post.author}
+                  </Text>
+                  {isRead ? <CheckCircleOutlined className="editorial-post-card__read-icon" /> : null}
+                </div>
+                <Text type="secondary" className="editorial-post-card__time">
+                  {post.time} • ◔
+                </Text>
+              </div>
+            </Space>
+
+            <Space size="small" className="editorial-post-card__meta">
+              <Tooltip title={isRead ? 'Đánh dấu là chưa đọc' : 'Đánh dấu đã đọc'}>
+                <Button
+                  type="text"
+                  className="editorial-post-card__read-toggle"
+                  icon={isRead ? <EyeOutlined /> : <CheckCircleOutlined />}
+                  onClick={handleReadToggle}
+                />
+              </Tooltip>
+              {getCategoryTag()}
+            </Space>
+          </div>
+
+          <Paragraph className="editorial-post-card__content">{post.content}</Paragraph>
+
+          {renderMediaGrid(post.images || [])}
+
+          <div className="editorial-post-card__actions">
+            <Space size="middle" wrap>
+              <Tooltip title={isArchivePage ? 'Bỏ lưu trữ' : 'Lưu bài viết'}>
+                <Button
+                  type="text"
+                  danger={isArchivePage}
+                  className="editorial-post-card__action-btn"
+                  icon={
+                    isArchivePage ? (
+                      <DeleteOutlined />
+                    ) : (
+                      <SaveOutlined />
+                    )
+                  }
+                  onClick={handleSaveToggle}
+                >
+                  {isArchivePage ? 'Bỏ lưu' : 'Lưu trữ'}
+                </Button>
+              </Tooltip>
+
+              <Tooltip title="Tải ảnh về máy">
+                <Button
+                  type="text"
+                  className="editorial-post-card__action-btn"
+                  icon={<DownloadOutlined />}
+                  onClick={handleDownloadAll}
+                >
+                  Tải ảnh ({post.images?.length || 0})
+                </Button>
+              </Tooltip>
+            </Space>
+
+            <Tooltip title="Sao chép văn bản">
+              <Button
+                type="default"
+                className="editorial-post-card__copy-btn"
+                icon={<CopyOutlined />}
+                onClick={handleCopy}
               >
-                {isArchivePage ? 'Bỏ lưu' : 'Lưu trữ'}
+                Sao chép
               </Button>
             </Tooltip>
-            <Tooltip title="Tải ảnh về máy"><Button type="text" icon={<DownloadOutlined style={{ fontSize: '20px' }} />} onClick={handleDownloadAll}>Tải ảnh ({post.images?.length || 0})</Button></Tooltip>
-          </Space>
-          <Tooltip title="Sao chép văn bản"><Button type="primary" ghost icon={<CopyOutlined />} onClick={handleCopy} style={{ borderRadius: '20px', fontWeight: '600' }}>Sao chép</Button></Tooltip>
+          </div>
         </div>
       </Card>
     </motion.div>

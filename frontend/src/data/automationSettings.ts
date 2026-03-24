@@ -2,10 +2,13 @@ import type { Post } from './mockData';
 
 export type TrendSource = 'facebook' | 'tiktok' | 'instagram' | 'shopee' | 'threads';
 export type TrendRangeMode = 'day' | 'week' | 'quarter' | 'custom';
+export type ScheduleMode = 'fixed_time' | 'interval_minutes';
 
 export interface AutomationSettings {
   enabled: boolean;
+  scheduleMode: ScheduleMode;
   postTime: string;
+  intervalMinutes: number;
   sources: TrendSource[];
   trendRangeMode: TrendRangeMode;
   customDateRange: {
@@ -39,6 +42,7 @@ export interface ValidationResult {
 const SETTINGS_KEY = 'blog_ai_nam_lun_settings';
 const HISTORY_KEY = 'blog_ai_nam_lun_generation_history';
 const FEED_KEY = 'blog_ai_nam_lun_generated_feed_posts';
+const FIXED_TIME_TOP_RESULTS = 5;
 
 type TopicTemplate = {
   topicKey: string;
@@ -180,7 +184,7 @@ function titleFingerprint(title: string): string {
 function recentHistory(history: GeneratedPostHistoryItem[]): GeneratedPostHistoryItem[] {
   return [...history]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 6);
+    .slice(0, 8);
 }
 
 function pickSource(sources: TrendSource[], history: GeneratedPostHistoryItem[]): TrendSource {
@@ -193,7 +197,7 @@ function pickSource(sources: TrendSource[], history: GeneratedPostHistoryItem[])
 
   recent.forEach((item, index) => {
     if (usageScore.has(item.source)) {
-      usageScore.set(item.source, (usageScore.get(item.source) || 0) + (6 - index));
+      usageScore.set(item.source, (usageScore.get(item.source) || 0) + (8 - index));
     }
   });
 
@@ -243,62 +247,15 @@ function previewToFeedPost(preview: GeneratedPostHistoryItem, nowIso?: string): 
   };
 }
 
-export function createDefaultAutomationSettings(): AutomationSettings {
-  return {
-    enabled: false,
-    postTime: '08:00',
-    sources: ['tiktok', 'threads'],
-    trendRangeMode: 'week',
-    customDateRange: {
-      start: null,
-      end: null,
-    },
-    lastRunAt: null,
-    lastGeneratedPostId: null,
-  };
+function getCandidateCount(settings: AutomationSettings): number {
+  return settings.scheduleMode === 'fixed_time' ? FIXED_TIME_TOP_RESULTS : 1;
 }
 
-export function validateAutomationSettings(settings: AutomationSettings): ValidationResult {
-  if (!settings.postTime) {
-    return {
-      ok: false,
-      message: 'Bạn cần chọn giờ đăng bài cho trợ lý.',
-    };
-  }
-
-  if (settings.sources.length === 0) {
-    return {
-      ok: false,
-      message: 'Hãy chọn ít nhất một nguồn để AI lấy trend.',
-    };
-  }
-
-  if (settings.trendRangeMode === 'custom') {
-    const { start, end } = settings.customDateRange;
-    if (!start || !end) {
-      return {
-        ok: false,
-        message: 'Bạn cần chọn đầy đủ ngày bắt đầu và ngày kết thúc cho phạm vi custom.',
-      };
-    }
-  }
-
-  return {
-    ok: true,
-    message: 'Cấu hình hợp lệ.',
-  };
-}
-
-export function generateAutomationPost(
+function createSingleCandidate(
   settings: AutomationSettings,
   history: GeneratedPostHistoryItem[],
-  nowIso = new Date().toISOString(),
+  nowIso: string,
 ): AutomationPreview {
-  const validation = validateAutomationSettings(settings);
-  if (!validation.ok) {
-    throw new Error(validation.message);
-  }
-
   const source = pickSource(settings.sources, history);
   const sourceLabel = SOURCE_LABELS[source];
   const rangeLabel = rangeLabelForSettings(settings);
@@ -333,6 +290,96 @@ export function generateAutomationPost(
   };
 }
 
+export function createDefaultAutomationSettings(): AutomationSettings {
+  return {
+    enabled: false,
+    scheduleMode: 'fixed_time',
+    postTime: '08:00',
+    intervalMinutes: 30,
+    sources: ['tiktok', 'threads'],
+    trendRangeMode: 'week',
+    customDateRange: {
+      start: null,
+      end: null,
+    },
+    lastRunAt: null,
+    lastGeneratedPostId: null,
+  };
+}
+
+export function validateAutomationSettings(settings: AutomationSettings): ValidationResult {
+  if (settings.scheduleMode === 'fixed_time' && !settings.postTime) {
+    return {
+      ok: false,
+      message: 'Bạn cần chọn giờ đăng bài cho trợ lý.',
+    };
+  }
+
+  if (
+    settings.scheduleMode === 'interval_minutes' &&
+    (!Number.isFinite(settings.intervalMinutes) || settings.intervalMinutes < 1)
+  ) {
+    return {
+      ok: false,
+      message: 'Bạn cần nhập số phút hợp lệ cho chế độ đăng theo chu kỳ.',
+    };
+  }
+
+  if (settings.sources.length === 0) {
+    return {
+      ok: false,
+      message: 'Hãy chọn ít nhất một nguồn để AI lấy trend.',
+    };
+  }
+
+  if (settings.trendRangeMode === 'custom') {
+    const { start, end } = settings.customDateRange;
+    if (!start || !end) {
+      return {
+        ok: false,
+        message: 'Bạn cần chọn đầy đủ ngày bắt đầu và ngày kết thúc cho phạm vi custom.',
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    message: 'Cấu hình hợp lệ.',
+  };
+}
+
+export function generateAutomationCandidates(
+  settings: AutomationSettings,
+  history: GeneratedPostHistoryItem[],
+  nowIso = new Date().toISOString(),
+): AutomationPreview[] {
+  const validation = validateAutomationSettings(settings);
+  if (!validation.ok) {
+    throw new Error(validation.message);
+  }
+
+  const count = getCandidateCount(settings);
+  const workingHistory = [...history];
+  const candidates: AutomationPreview[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const candidateNow = new Date(new Date(nowIso).getTime() + index * 1000).toISOString();
+    const candidate = createSingleCandidate(settings, workingHistory, candidateNow);
+    candidates.push(candidate);
+    workingHistory.push(candidate);
+  }
+
+  return candidates;
+}
+
+export function generateAutomationPost(
+  settings: AutomationSettings,
+  history: GeneratedPostHistoryItem[],
+  nowIso = new Date().toISOString(),
+): AutomationPreview {
+  return generateAutomationCandidates(settings, history, nowIso)[0];
+}
+
 export function mergeFeedPosts<T extends { createdAt: string }>(basePosts: T[], generatedPosts: T[]): T[] {
   return [...generatedPosts, ...basePosts].sort(
     (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
@@ -346,6 +393,15 @@ export function shouldRunAutomationNow(
 ): boolean {
   if (!settings.enabled) {
     return false;
+  }
+
+  if (settings.scheduleMode === 'interval_minutes') {
+    if (!lastRunAt) {
+      return true;
+    }
+
+    const diffMs = new Date(nowIso).getTime() - new Date(lastRunAt).getTime();
+    return diffMs >= settings.intervalMinutes * 60 * 1000;
   }
 
   const [hours, minutes] = settings.postTime.split(':').map((part) => Number(part));
@@ -375,12 +431,25 @@ export function markPreviewAsPosted(preview: AutomationPreview, nowIso = new Dat
   };
 }
 
+export function createScheduleSummary(settings: AutomationSettings): string {
+  if (settings.scheduleMode === 'interval_minutes') {
+    return `Mỗi ${settings.intervalMinutes} phút AI sẽ lấy 1 kết quả tốt nhất để đăng.`;
+  }
+
+  return `Mỗi ngày lúc ${settings.postTime}, AI sẽ chọn top ${FIXED_TIME_TOP_RESULTS} kết quả tốt nhất rồi dùng bài đứng đầu để đăng theo khung giờ cố định.`;
+}
+
 export function createStatusText(settings: AutomationSettings): string {
-  const sourceLabel = settings.sources.length > 0 ? settings.sources.map((item) => SOURCE_LABELS[item]).join(', ') : 'chưa chọn';
+  const sourceLabel =
+    settings.sources.length > 0 ? settings.sources.map((item) => SOURCE_LABELS[item]).join(', ') : 'chưa chọn';
   const rangeLabel = rangeLabelForSettings(settings);
   const stateLabel = settings.enabled ? 'Đang bật tự động đăng' : 'Đang tạm nghỉ';
+  const scheduleLabel =
+    settings.scheduleMode === 'fixed_time'
+      ? `${settings.postTime} mỗi ngày | top ${FIXED_TIME_TOP_RESULTS}`
+      : `${settings.intervalMinutes} phút/lần | 1 kết quả`;
 
-  return `${stateLabel} | ${settings.postTime} mỗi ngày | Nguồn: ${sourceLabel} | Phạm vi: ${rangeLabel}`;
+  return `${stateLabel} | ${scheduleLabel} | Nguồn: ${sourceLabel} | Phạm vi: ${rangeLabel}`;
 }
 
 export function loadAutomationSettings(): AutomationSettings {
@@ -439,7 +508,9 @@ export function upsertPreviewIntoHistory(
   history: GeneratedPostHistoryItem[],
 ): GeneratedPostHistoryItem[] {
   const remaining = history.filter((item) => item.id !== preview.id);
-  return [preview, ...remaining].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  return [preview, ...remaining].sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  );
 }
 
 export function appendPostedFeedPost(post: Post, posts: Post[]): Post[] {
@@ -447,3 +518,4 @@ export function appendPostedFeedPost(post: Post, posts: Post[]): Post[] {
 }
 
 export const automationSourceLabels = SOURCE_LABELS;
+export const fixedTimeTopResultsCount = FIXED_TIME_TOP_RESULTS;

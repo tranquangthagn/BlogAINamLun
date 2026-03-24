@@ -25,13 +25,15 @@ test('creates sensible default settings', async () => {
   const settings = mod.createDefaultAutomationSettings();
 
   assert.equal(settings.enabled, false);
+  assert.equal(settings.scheduleMode, 'fixed_time');
   assert.equal(settings.postTime, '08:00');
+  assert.equal(settings.intervalMinutes, 30);
   assert.deepEqual(settings.sources, ['tiktok', 'threads']);
   assert.equal(settings.trendRangeMode, 'week');
   assert.deepEqual(settings.customDateRange, { start: null, end: null });
 });
 
-test('validates missing sources and invalid custom range', async () => {
+test('validates missing sources, invalid custom range, and invalid interval', async () => {
   const mod = await loadAutomationModule();
   const base = mod.createDefaultAutomationSettings();
 
@@ -49,6 +51,14 @@ test('validates missing sources and invalid custom range', async () => {
   });
   assert.equal(badCustom.ok, false);
   assert.match(badCustom.message, /ngày|range|custom/i);
+
+  const badInterval = mod.validateAutomationSettings({
+    ...base,
+    scheduleMode: 'interval_minutes',
+    intervalMinutes: 0,
+  });
+  assert.equal(badInterval.ok, false);
+  assert.match(badInterval.message, /phút|chu kỳ|interval/i);
 });
 
 test('generates a post and avoids recent duplicate source-topic combos', async () => {
@@ -63,6 +73,7 @@ test('generates a post and avoids recent duplicate source-topic combos', async (
       topicKey: 'morning-checklist',
       createdAt: '2026-03-22T08:00:00.000Z',
       posted: true,
+      category: 'general',
     },
   ];
 
@@ -74,6 +85,29 @@ test('generates a post and avoids recent duplicate source-topic combos', async (
   assert.notEqual(`${post.source}:${post.topicKey}`, 'tiktok:morning-checklist');
 });
 
+test('builds top 5 candidates for fixed-time schedule mode', async () => {
+  const mod = await loadAutomationModule();
+  const settings = mod.createDefaultAutomationSettings();
+
+  const candidates = mod.generateAutomationCandidates(settings, [], '2026-03-24T08:00:00.000Z');
+
+  assert.equal(candidates.length, 5);
+  assert.equal(new Set(candidates.map((item) => `${item.source}:${item.topicKey}`)).size, 5);
+});
+
+test('builds a single candidate for interval schedule mode', async () => {
+  const mod = await loadAutomationModule();
+  const settings = {
+    ...mod.createDefaultAutomationSettings(),
+    scheduleMode: 'interval_minutes',
+    intervalMinutes: 15,
+  };
+
+  const candidates = mod.generateAutomationCandidates(settings, [], '2026-03-24T08:00:00.000Z');
+
+  assert.equal(candidates.length, 1);
+});
+
 test('merges generated posts ahead of older feed items', async () => {
   const mod = await loadAutomationModule();
 
@@ -82,9 +116,7 @@ test('merges generated posts ahead of older feed items', async () => {
       { id: 1, createdAt: '2026-03-22T10:00:00.000Z' },
       { id: 2, createdAt: '2026-03-20T10:00:00.000Z' },
     ],
-    [
-      { id: 100, createdAt: '2026-03-23T09:00:00.000Z' },
-    ],
+    [{ id: 100, createdAt: '2026-03-23T09:00:00.000Z' }],
   );
 
   assert.deepEqual(
@@ -93,7 +125,7 @@ test('merges generated posts ahead of older feed items', async () => {
   );
 });
 
-test('decides whether open-app automation should run only once per local day', async () => {
+test('decides whether open-app automation should run only once per local day in fixed mode', async () => {
   const mod = await loadAutomationModule();
   const settings = mod.createDefaultAutomationSettings();
 
@@ -110,4 +142,28 @@ test('decides whether open-app automation should run only once per local day', a
     '2026-03-23T11:00:00.000Z',
   );
   assert.equal(shouldRunAgain, false);
+});
+
+test('decides whether interval automation should wait for enough minutes', async () => {
+  const mod = await loadAutomationModule();
+  const settings = {
+    ...mod.createDefaultAutomationSettings(),
+    enabled: true,
+    scheduleMode: 'interval_minutes',
+    intervalMinutes: 20,
+  };
+
+  const tooSoon = mod.shouldRunAutomationNow(
+    settings,
+    '2026-03-24T08:05:00.000Z',
+    '2026-03-24T08:20:00.000Z',
+  );
+  assert.equal(tooSoon, false);
+
+  const ready = mod.shouldRunAutomationNow(
+    settings,
+    '2026-03-24T08:05:00.000Z',
+    '2026-03-24T08:26:00.000Z',
+  );
+  assert.equal(ready, true);
 });
