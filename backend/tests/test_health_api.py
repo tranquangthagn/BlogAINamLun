@@ -1,8 +1,9 @@
+import app.api.routes.health as health_module
 import app.main as main_module
 from fastapi.testclient import TestClient
 
-from app.main import create_app
 from app.core.config import get_settings
+from app.main import create_app
 
 
 def test_health_endpoint_returns_ok():
@@ -28,3 +29,27 @@ def test_health_startup_skips_session_factory_when_scheduler_disabled(monkeypatc
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_ready_endpoint_returns_ok_when_database_check_passes(monkeypatch):
+    monkeypatch.setattr(health_module, "check_database_connection", lambda: (True, None))
+
+    with TestClient(create_app()) as client:
+        response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "database": "ok"}
+
+
+def test_ready_endpoint_returns_503_when_database_check_fails(monkeypatch):
+    monkeypatch.setattr(health_module, "check_database_connection", lambda: (False, "db_unreachable"))
+
+    with TestClient(create_app()) as client:
+        response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "degraded",
+        "database": "unavailable",
+        "reason": "db_unreachable",
+    }

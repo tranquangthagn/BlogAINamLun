@@ -322,8 +322,11 @@ The first backend version should expose a clean JSON API for the current fronten
 ### System Routes
 
 - `GET /health`
+- `GET /health/ready`
 
-Returns application health and confirms core dependencies are available.
+`/health` is the liveness probe and should return quickly even when the database is unavailable.
+
+`/health/ready` is the readiness probe and should verify the API can reach MySQL before the app is considered ready for traffic.
 
 ### Posts Routes
 
@@ -425,6 +428,7 @@ The system setup should include:
 
 - `.env`-driven configuration
 - MySQL connection settings
+- readiness and liveness probes
 - migration support
 - local development startup instructions
 - Docker support for app and MySQL database
@@ -439,8 +443,11 @@ The first local run path should be straightforward:
 - start MySQL and backend together through `docker-compose.yml` when local MySQL credentials are unknown or inconsistent
 - run Alembic migrations before relying on API data
 - verify `GET /health`
+- verify `GET /health/ready`
 - verify `GET /api/posts`
 - verify `PUT /api/automation/settings` and `POST /api/automation/preview`
+
+If local MySQL is running on Windows, keep `CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1` in the environment to avoid OpenSSL legacy-provider startup failures when PyMySQL imports `cryptography`.
 
 This runbook exists to reduce ambiguity between schema setup, seed behavior, and application startup.
 
