@@ -64,3 +64,16 @@ def client(db_session) -> Generator[TestClient, None, None]:
 def seeded_post(db_session):
     ensure_seed_data(db_session)
     return PostsRepository(db_session).list_posts()[0]
+
+
+@pytest.fixture()
+def automation_settings_payload():
+    return {
+        "enabled": True,
+        "scheduleMode": "fixed_time",
+        "postTime": "08:00",
+        "intervalMinutes": 30,
+        "sources": ["tiktok", "threads"],
+        "trendRangeMode": "week",
+        "customDateRange": {"start": None, "end": None},
+    }
