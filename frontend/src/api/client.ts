@@ -1,8 +1,17 @@
 const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+const ERROR_MESSAGE_MAP: Record<string, string> = {
+  AUTOMATION_QUOTA_EXCEEDED: 'AI tam thoi het quota tao bai. Hay thu lai sau it phut.',
+  AUTOMATION_NOT_CONFIGURED: 'AI chua duoc cau hinh API key. Hay kiem tra backend truoc khi tao bai.',
+  AUTOMATION_GENERATION_FAILED: 'AI tao bai chua thanh cong. Hay thu lai them mot lan nua.',
+};
 
 function getApiBaseUrl(): string {
   const config = globalThis as { __BLOG_API_BASE_URL__?: string };
   return config.__BLOG_API_BASE_URL__ ?? DEFAULT_API_BASE_URL;
+}
+
+function normalizeApiErrorMessage(message: string): string {
+  return ERROR_MESSAGE_MAP[message] ?? message;
 }
 
 export async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -22,7 +31,7 @@ export async function requestJson<T>(path: string, init: RequestInit = {}): Prom
     try {
       const payload = await response.json();
       if (typeof payload?.detail === 'string') {
-        message = payload.detail;
+        message = normalizeApiErrorMessage(payload.detail);
       }
     } catch {
       // Keep the default message when the error body is not JSON.

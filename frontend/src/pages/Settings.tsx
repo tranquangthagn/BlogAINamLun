@@ -100,11 +100,57 @@ const cardMotion = {
   animate: { opacity: 1, y: 0 },
 };
 
+type RuntimeStatusTone = 'idle' | 'ready' | 'warning';
+
+type RuntimeStatus = {
+  badge: string;
+  title: string;
+  detail: string;
+  tone: RuntimeStatusTone;
+};
+
+const DEFAULT_RUNTIME_STATUS: RuntimeStatus = {
+  badge: 'Dang cho lenh',
+  title: 'AI runtime san sang',
+  detail: 'Backend da ket noi. Ban co the tao preview hoac dang thu bat cu luc nao.',
+  tone: 'idle',
+};
+
+function buildRuntimeStatusFromError(error: unknown): RuntimeStatus {
+  const detail = error instanceof Error ? error.message : 'Chua the ket noi toi backend automation.';
+
+  if (detail.includes('API key')) {
+    return {
+      badge: 'Can cau hinh',
+      title: 'Gemini chua duoc bat',
+      detail,
+      tone: 'warning',
+    };
+  }
+
+  if (detail.includes('het quota')) {
+    return {
+      badge: 'Tam gioi han',
+      title: 'Gemini dang het quota',
+      detail,
+      tone: 'warning',
+    };
+  }
+
+  return {
+    badge: 'Can kiem tra',
+    title: 'AI runtime gap su co',
+    detail,
+    tone: 'warning',
+  };
+}
+
 const Settings: React.FC = () => {
   const [messageApi, contextHolder] = message.useMessage();
   const [settings, setSettings] = useState<AutomationSettings>(createDefaultAutomationSettings());
   const [history, setHistory] = useState<GeneratedPostHistoryItem[]>([]);
   const [previewCandidates, setPreviewCandidates] = useState<GeneratedPostHistoryItem[]>([]);
+  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus>(DEFAULT_RUNTIME_STATUS);
 
   useEffect(() => {
     let active = true;
@@ -122,6 +168,7 @@ const Settings: React.FC = () => {
 
         setSettings(nextSettings);
         setHistory(nextHistory);
+        setRuntimeStatus(DEFAULT_RUNTIME_STATUS);
       } catch {
         if (!active) {
           return;
@@ -129,6 +176,12 @@ const Settings: React.FC = () => {
 
         setSettings(createDefaultAutomationSettings());
         setHistory([]);
+        setRuntimeStatus({
+          badge: 'Mat ket noi',
+          title: 'Chua doc duoc backend',
+          detail: 'Dang dung che do an toan. Hay kiem tra API neu ban muon tao bai that.',
+          tone: 'warning',
+        });
       }
     };
 
@@ -175,9 +228,16 @@ const Settings: React.FC = () => {
     try {
       const nextSettings = await updateAutomationSettings(settings);
       setSettings(nextSettings);
+      setRuntimeStatus({
+        badge: 'Da dong bo',
+        title: 'Cau hinh da duoc luu',
+        detail: 'Backend da nhan settings moi. Luot preview tiep theo se dung cau hinh nay.',
+        tone: 'ready',
+      });
       emitAutomationChanged();
       messageApi.success('Đã lưu cài đặt trợ lý tự động đăng bài.');
     } catch (error) {
+      setRuntimeStatus(buildRuntimeStatusFromError(error));
       messageApi.warning(error instanceof Error ? error.message : 'Chưa thể lưu cài đặt.');
     }
   };
@@ -187,12 +247,22 @@ const Settings: React.FC = () => {
       const nextCandidates = await previewAutomationCandidates(settings);
 
       setPreviewCandidates(nextCandidates);
+      setRuntimeStatus({
+        badge: 'Preview OK',
+        title: 'AI vua tao candidate moi',
+        detail:
+          settings.scheduleMode === 'fixed_time'
+            ? `Da tao ${nextCandidates.length} candidate de ban xem nhanh truoc khi dang.`
+            : 'Da tao candidate moi cho chu ky hien tai.',
+        tone: 'ready',
+      });
       messageApi.success(
         settings.scheduleMode === 'fixed_time'
           ? `Đã tạo top ${fixedTimeTopResultsCount} bài nháp xem trước.`
           : 'Đã tạo bài nháp xem trước cho chu kỳ hiện tại.',
       );
     } catch (error) {
+      setRuntimeStatus(buildRuntimeStatusFromError(error));
       messageApi.warning(error instanceof Error ? error.message : 'Chưa thể tạo bài nháp.');
     }
   };
@@ -208,9 +278,16 @@ const Settings: React.FC = () => {
       setPreviewCandidates((current) =>
         current.map((item, index) => (index === 0 ? { ...item, posted: true } : item)),
       );
+      setRuntimeStatus({
+        badge: 'Dang thanh cong',
+        title: 'AI da day 1 bai vao feed',
+        detail: 'Luot post-now vua thanh cong va lich su backend da duoc cap nhat.',
+        tone: 'ready',
+      });
       emitAutomationChanged();
       messageApi.success('AI đã đăng thử một bài mới vào Bản tin.');
     } catch (error) {
+      setRuntimeStatus(buildRuntimeStatusFromError(error));
       messageApi.warning(error instanceof Error ? error.message : 'Chưa thể đăng bài ngay lúc này.');
     }
   };
@@ -437,6 +514,23 @@ const Settings: React.FC = () => {
                       : '1 bài mới mỗi chu kỳ'}
                   </strong>
                 </div>
+              </div>
+            </Card>
+          </motion.div>
+
+          <motion.div {...cardMotion} transition={{ delay: 0.18 }}>
+            <Card className="settings-card settings-runtime-card">
+              <div className="settings-card__header">
+                <Sparkles size={18} />
+                <Title level={3}>AI runtime</Title>
+              </div>
+              <Paragraph className="settings-muted">
+                Trang thai phan hoi gan nhat tu backend Gemini de ban biet nen doi quota, sua cau hinh hay tiep tuc dang.
+              </Paragraph>
+              <div className={`settings-runtime-card__badge is-${runtimeStatus.tone}`}>{runtimeStatus.badge}</div>
+              <div className="settings-runtime-card__content">
+                <strong>{runtimeStatus.title}</strong>
+                <span>{runtimeStatus.detail}</span>
               </div>
             </Card>
           </motion.div>

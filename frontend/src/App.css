@@ -1278,6 +1278,57 @@ body {
   line-height: 1.5;
 }
 
+.settings-runtime-card {
+  overflow: hidden;
+}
+
+.settings-runtime-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.settings-runtime-card__badge.is-idle {
+  background: rgba(195, 225, 255, 0.45);
+  color: #38618b;
+}
+
+.settings-runtime-card__badge.is-ready {
+  background: rgba(191, 239, 203, 0.58);
+  color: #24613a;
+}
+
+.settings-runtime-card__badge.is-warning {
+  background: rgba(255, 226, 173, 0.7);
+  color: #8a5200;
+}
+
+.settings-runtime-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.62);
+}
+
+.settings-runtime-card__content strong {
+  color: #433456;
+}
+
+.settings-runtime-card__content span {
+  color: #7a6f88;
+  line-height: 1.6;
+}
+
 .settings-summary-box,
 .settings-warning,
 .preview-empty {
