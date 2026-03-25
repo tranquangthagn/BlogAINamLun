@@ -308,7 +308,7 @@ switch ($Action) {
                 scheduleMode = "fixed_time"
                 postTime = "08:00"
                 intervalMinutes = 30
-                sources = @("tiktok", "threads")
+                sources = @("tiktok")
                 trendRangeMode = "week"
                 customDateRange = @{
                     start = $null
@@ -326,15 +326,27 @@ switch ($Action) {
             Write-Output ("Settings tone: {0}" -f $updatedSettings.tone)
             Write-Output ("History items: {0}" -f $history.Count)
 
+            $receipt = Invoke-BackendRequest -Uri "$baseUrl/api/automation/post-now" -Method "Post"
+            if ($receipt.mode -ne "queued" -or $receipt.queuedCount -lt 3) {
+                throw "Post-now smoke expected a queued batch receipt with at least 3 jobs."
+            }
+
+            Write-Output ("Queued batch: {0} ({1} jobs)" -f $receipt.batchId, $receipt.queuedCount)
+
             if ($RunPreview) {
                 $preview = Invoke-BackendRequest -Uri "$baseUrl/api/automation/preview" -Method "Post" -Body $payload -TimeoutSec 60
-                if ($preview.Count -lt 1) {
-                    throw "Preview smoke expected at least one generated candidate."
+                if (-not $preview.items -or $preview.items.Count -ne 3) {
+                    throw "Preview smoke expected exactly 3 generated items for one source."
                 }
 
-                Write-Output ("Preview title: {0}" -f $preview[0].title)
+                if (($preview.items | Where-Object { -not $_.images -or $_.images.Count -lt 1 }).Count -gt 0) {
+                    throw "Preview smoke expected each generated item to include at least one image."
+                }
+
+                Write-Output ("Preview batch: {0} ({1} items)" -f $preview.batchId, $preview.items.Count)
+                Write-Output ("Preview title: {0}" -f $preview.items[0].title)
             } else {
-                Write-Output "Preview smoke skipped. Use -RunPreview to spend one controlled Gemini call."
+                Write-Output "Preview smoke skipped. Use -RunPreview to spend one controlled 3-item Gemini batch."
             }
         } finally {
             Stop-BackendProcess -Process $serverProcess

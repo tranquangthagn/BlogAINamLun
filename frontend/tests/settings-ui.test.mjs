@@ -18,7 +18,9 @@ test('settings page file exists with backend automation sections', () => {
     'updateAutomationSettings',
     'settings-status-card',
     'settings-preview-card',
-    'fixedTimeTopResultsCount',
+    'groupPreviewBySource',
+    'queuedCount',
+    'preview-post__images',
   ];
 
   for (const text of expectedTexts) {

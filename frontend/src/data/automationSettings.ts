@@ -32,6 +32,7 @@ export interface AutomationSettings {
 
 export interface GeneratedPostHistoryItem {
   id: number;
+  batchId: string;
   title: string;
   content: string;
   source: TrendSource;
@@ -39,11 +40,25 @@ export interface GeneratedPostHistoryItem {
   createdAt: string;
   posted: boolean;
   category: Post['category'];
+  status: string;
+  failureReason: string | null;
+  images: string[];
   insights: AutomationPreviewInsight[];
 }
 
 export interface AutomationPreview extends GeneratedPostHistoryItem {
   feedPost: Post;
+}
+
+export interface AutomationPreviewBatch {
+  batchId: string;
+  items: GeneratedPostHistoryItem[];
+}
+
+export interface AutomationBatchReceipt {
+  batchId: string;
+  queuedCount: number;
+  mode: 'queued';
 }
 
 export interface ValidationResult {
@@ -268,6 +283,7 @@ function createSingleCandidate(
 
   const generated: GeneratedPostHistoryItem = {
     id: nextId,
+    batchId: 'local-preview',
     title,
     content: chosen.content(sourceLabel, rangeLabel),
     source,
@@ -275,6 +291,9 @@ function createSingleCandidate(
     createdAt: nowIso,
     posted: false,
     category: chosen.category,
+    status: 'preview',
+    failureReason: null,
+    images: [],
     insights: [],
   };
 
@@ -429,10 +448,10 @@ export function markPreviewAsPosted(preview: AutomationPreview, nowIso = new Dat
 
 export function createScheduleSummary(settings: AutomationSettings): string {
   if (settings.scheduleMode === 'interval_minutes') {
-    return `Mỗi ${settings.intervalMinutes} phút AI sẽ lấy 1 kết quả tốt nhất để đăng.`;
+    return `Mỗi ${settings.intervalMinutes} phút, mỗi nguồn sẽ chạy dần 3 bài: thời trang, sức khỏe và mẹo vặt.`;
   }
 
-  return `Mỗi ngày lúc ${settings.postTime}, AI sẽ chọn top ${FIXED_TIME_TOP_RESULTS} kết quả tốt nhất rồi dùng bài đứng đầu để đăng theo khung giờ cố định.`;
+  return `Mỗi ngày lúc ${settings.postTime}, mỗi nguồn trend sẽ tạo dần 3 bài riêng cho thời trang, sức khỏe và mẹo vặt.`;
 }
 
 export function createStatusText(settings: AutomationSettings): string {
@@ -442,8 +461,8 @@ export function createStatusText(settings: AutomationSettings): string {
   const stateLabel = settings.enabled ? 'Đang bật tự động đăng' : 'Đang tạm nghỉ';
   const scheduleLabel =
     settings.scheduleMode === 'fixed_time'
-      ? `${settings.postTime} mỗi ngày | top ${FIXED_TIME_TOP_RESULTS}`
-      : `${settings.intervalMinutes} phút/lần | 1 kết quả`;
+      ? `${settings.postTime} mỗi ngày | 3 bài / mỗi nguồn`
+      : `${settings.intervalMinutes} phút/lần | 3 bài / mỗi nguồn`;
 
   return `${stateLabel} | ${scheduleLabel} | Nguồn: ${sourceLabel} | Phạm vi: ${rangeLabel}`;
 }

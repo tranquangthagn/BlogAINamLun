@@ -19,6 +19,10 @@ test('settings page uses a split layout with flow and aside columns', () => {
   assert.ok(source.includes('focusPrompt'));
   assert.ok(source.includes('AI dang dua tren'));
   assert.ok(source.includes('settings-preview-card'));
+  assert.ok(source.includes('preview-group'));
+  assert.ok(source.includes('preview-post__images'));
+  assert.ok(source.includes('queuedCount'));
+  assert.ok(source.includes('settings.sources.length * 3'));
 });
 
 test('settings css defines split layout classes', () => {
@@ -32,4 +36,7 @@ test('settings css defines split layout classes', () => {
   assert.ok(source.includes('.settings-runtime-card__badge'));
   assert.ok(source.includes('.settings-voice-card'));
   assert.ok(source.includes('.preview-insights'));
+  assert.ok(source.includes('.preview-group'));
+  assert.ok(source.includes('.preview-group__header'));
+  assert.ok(source.includes('.preview-post__images'));
 });

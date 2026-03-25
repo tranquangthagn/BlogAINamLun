@@ -1,5 +1,9 @@
 from app.schemas.automation_generation import TrendRequestContext, TrendSignal
-from app.services.automation_trends import AutomationTrendCoordinator, TrendProviderRegistry
+from app.services.automation_trends import (
+    AutomationTrendCoordinator,
+    TrendProviderRegistry,
+    _queries_for_context,
+)
 
 
 def test_trend_signal_supports_minimal_normalized_shape():
@@ -10,16 +14,20 @@ def test_trend_signal_supports_minimal_normalized_shape():
     assert signal.score == 0.9
 
 
-def test_trend_request_context_tracks_source_and_range_preferences():
+def test_trend_request_context_tracks_source_category_and_audience_preferences():
     context = TrendRequestContext(
+        source="shopee",
         sources=["shopee"],
         source_label="Shopee",
+        category="tips",
         trend_range_mode="week",
-        range_label="7 ngay gan day",
+        range_label="7 ngày gần đây",
+        audience_profile="nu tre 18-25",
     )
 
     assert context.sources == ["shopee"]
-    assert context.range_label == "7 ngay gan day"
+    assert context.category == "tips"
+    assert context.audience_profile == "nu tre 18-25"
 
 
 class StubTrendProvider:
@@ -48,10 +56,12 @@ def test_registry_maps_tiktok_to_social_style_trends():
 
 def test_collect_trends_returns_normalized_signals_sorted_by_score():
     context = TrendRequestContext(
+        source="shopee",
         sources=["shopee"],
         source_label="Shopee",
+        category="tips",
         trend_range_mode="week",
-        range_label="7 ngay gan day",
+        range_label="7 ngày gần đây",
     )
     provider = StubTrendProvider(
         "commerce_rss",
@@ -72,3 +82,21 @@ def test_collect_trends_returns_normalized_signals_sorted_by_score():
         "Top shopping trend",
         "Second signal",
     ]
+
+
+def test_query_builder_uses_category_and_young_women_persona_hints():
+    context = TrendRequestContext(
+        source="tiktok",
+        sources=["tiktok"],
+        source_label="TikTok",
+        category="fashion",
+        trend_range_mode="week",
+        range_label="7 ngày gần đây",
+        audience_profile="nu tre 18-25",
+        allow_audience_expansion=True,
+    )
+
+    queries = _queries_for_context(context)
+
+    assert any("beauty" in query or "style" in query for query in queries)
+    assert any("women" in query or "nữ trẻ" in query for query in queries)

@@ -53,3 +53,18 @@ def test_ready_endpoint_returns_503_when_database_check_fails(monkeypatch):
         "database": "unavailable",
         "reason": "db_unreachable",
     }
+
+
+def test_cors_allows_loopback_dev_origins_on_dynamic_vite_ports():
+    client = TestClient(create_app())
+
+    response = client.options(
+        "/api/automation/settings",
+        headers={
+            "Origin": "http://127.0.0.1:5174",
+            "Access-Control-Request-Method": "PUT",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5174"

@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db_session
 from app.schemas.automation import (
-    AutomationPreviewResponse,
+    AutomationBatchItemResponse,
+    AutomationBatchReceiptResponse,
+    AutomationPreviewBatchResponse,
     AutomationSettingsPayload,
     AutomationSettingsResponse,
 )
-from app.schemas.posts import PostResponse
 from app.services.automation import AutomationService
 from app.services.automation_gemini import (
     AutomationConfigurationError,
@@ -32,16 +33,16 @@ def update_settings(
     return AutomationService(session).update_settings(payload)
 
 
-@router.get("/history", response_model=list[AutomationPreviewResponse])
-def list_history(session: Session = Depends(get_db_session)) -> list[AutomationPreviewResponse]:
+@router.get("/history", response_model=list[AutomationBatchItemResponse])
+def list_history(session: Session = Depends(get_db_session)) -> list[AutomationBatchItemResponse]:
     return AutomationService(session).list_history()
 
 
-@router.post("/preview", response_model=list[AutomationPreviewResponse])
+@router.post("/preview", response_model=AutomationPreviewBatchResponse)
 def preview_candidates(
     payload: AutomationSettingsPayload,
     session: Session = Depends(get_db_session),
-) -> list[AutomationPreviewResponse]:
+) -> AutomationPreviewBatchResponse:
     try:
         return AutomationService(session).generate_preview_candidates(payload)
     except AutomationQuotaError as exc:
@@ -52,8 +53,8 @@ def preview_candidates(
         raise HTTPException(status_code=502, detail="AUTOMATION_GENERATION_FAILED") from exc
 
 
-@router.post("/post-now", response_model=PostResponse)
-def post_now(session: Session = Depends(get_db_session)) -> PostResponse:
+@router.post("/post-now", response_model=AutomationBatchReceiptResponse)
+def post_now(session: Session = Depends(get_db_session)) -> AutomationBatchReceiptResponse:
     try:
         return AutomationService(session).post_now_from_settings()
     except AutomationQuotaError as exc:
