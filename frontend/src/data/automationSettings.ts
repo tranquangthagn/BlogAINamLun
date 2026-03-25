@@ -1,4 +1,4 @@
-import type { Post } from './mockData';
+import type { Post } from '../types/post';
 
 export type TrendSource = 'facebook' | 'tiktok' | 'instagram' | 'shopee' | 'threads';
 export type TrendRangeMode = 'day' | 'week' | 'quarter' | 'custom';
@@ -39,9 +39,6 @@ export interface ValidationResult {
   message: string;
 }
 
-const SETTINGS_KEY = 'blog_ai_nam_lun_settings';
-const HISTORY_KEY = 'blog_ai_nam_lun_generation_history';
-const FEED_KEY = 'blog_ai_nam_lun_generated_feed_posts';
 const FIXED_TIME_TOP_RESULTS = 5;
 
 type TopicTemplate = {
@@ -126,22 +123,6 @@ const TOPIC_TEMPLATES: TopicTemplate[] = [
       `Trong ${range}, ${source} đang nổi lên những nội dung rất thực tế về cách chọn món đáng tiền, tránh mua dư và tối ưu trải nghiệm mua sắm. Đây là hướng nội dung phù hợp với chất feed cá nhân nhưng vẫn bắt trend tốt.`,
   },
 ];
-
-function safeJsonParse<T>(value: string | null, fallback: T): T {
-  if (!value) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function canUseStorage(): boolean {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
-}
 
 function pad(value: number): string {
   return `${value}`.padStart(2, '0');
@@ -450,57 +431,6 @@ export function createStatusText(settings: AutomationSettings): string {
       : `${settings.intervalMinutes} phút/lần | 1 kết quả`;
 
   return `${stateLabel} | ${scheduleLabel} | Nguồn: ${sourceLabel} | Phạm vi: ${rangeLabel}`;
-}
-
-export function loadAutomationSettings(): AutomationSettings {
-  if (!canUseStorage()) {
-    return createDefaultAutomationSettings();
-  }
-
-  return {
-    ...createDefaultAutomationSettings(),
-    ...safeJsonParse<Partial<AutomationSettings>>(window.localStorage.getItem(SETTINGS_KEY), {}),
-  };
-}
-
-export function saveAutomationSettings(settings: AutomationSettings): void {
-  if (!canUseStorage()) {
-    return;
-  }
-
-  window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-}
-
-export function loadGenerationHistory(): GeneratedPostHistoryItem[] {
-  if (!canUseStorage()) {
-    return [];
-  }
-
-  return safeJsonParse<GeneratedPostHistoryItem[]>(window.localStorage.getItem(HISTORY_KEY), []);
-}
-
-export function saveGenerationHistory(history: GeneratedPostHistoryItem[]): void {
-  if (!canUseStorage()) {
-    return;
-  }
-
-  window.localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-}
-
-export function loadGeneratedFeedPosts(): Post[] {
-  if (!canUseStorage()) {
-    return [];
-  }
-
-  return safeJsonParse<Post[]>(window.localStorage.getItem(FEED_KEY), []);
-}
-
-export function saveGeneratedFeedPosts(posts: Post[]): void {
-  if (!canUseStorage()) {
-    return;
-  }
-
-  window.localStorage.setItem(FEED_KEY, JSON.stringify(posts));
 }
 
 export function upsertPreviewIntoHistory(

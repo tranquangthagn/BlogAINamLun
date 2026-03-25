@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import {
   BrowserRouter as Router,
   Route,
@@ -7,10 +7,11 @@ import {
 } from 'react-router-dom';
 import { Menu, Search, Sparkles } from 'lucide-react';
 import Sidebar from './components/Sidebar';
-import Home from './pages/Home';
-import Archive from './pages/Archive';
-import Settings from './pages/Settings';
 import './App.css';
+
+const Home = lazy(() => import('./pages/Home'));
+const Archive = lazy(() => import('./pages/Archive'));
+const Settings = lazy(() => import('./pages/Settings'));
 
 const SHELL_COPY: Record<
   string,
@@ -89,11 +90,13 @@ function AppShell() {
         </header>
 
         <div className="content-scroll">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/posts" element={<Archive />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
+          <Suspense fallback={<div className="editorial-page-loading">Dang tai trang...</div>}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/posts" element={<Archive />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </Suspense>
         </div>
       </main>
     </div>

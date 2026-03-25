@@ -1,4 +1,4 @@
-import type { Post } from '../data/mockData';
+import type { Post } from '../types/post';
 import { requestJson } from './client';
 
 export interface PostStateResponse {

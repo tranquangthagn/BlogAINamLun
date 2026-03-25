@@ -15,7 +15,7 @@ import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
 import { listArchive } from '../api/archive';
 import PostCard from '../components/PostCard';
-import type { Post } from '../data/mockData';
+import type { Post } from '../types/post';
 
 dayjs.extend(isBetween);
 

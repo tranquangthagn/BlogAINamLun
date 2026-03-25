@@ -26,7 +26,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { markPostRead, savePost, unsavePost } from '../api/archive';
-import type { Post } from '../data/mockData';
+import type { Post } from '../types/post';
 
 const { Text, Paragraph } = Typography;
 

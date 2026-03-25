@@ -1,15 +1,4 @@
-export interface Post {
-  id: number;
-  author: string;
-  avatar: string;
-  content: string;
-  images?: string[];
-  time: string;
-  createdAt: string;
-  category: 'fashion' | 'health' | 'tips' | 'general';
-  likes: number;
-  comments: number;
-}
+import type { Post } from '../types/post';
 
 export const FAKE_POSTS: Post[] = [
   {

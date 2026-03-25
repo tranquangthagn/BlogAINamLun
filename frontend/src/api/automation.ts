@@ -1,8 +1,8 @@
-import type { Post } from '../data/mockData';
 import type {
   AutomationSettings,
   GeneratedPostHistoryItem,
 } from '../data/automationSettings';
+import type { Post } from '../types/post';
 import { requestJson } from './client';
 
 function toSettingsPayload(settings: AutomationSettings) {

@@ -29,6 +29,7 @@ test('settings page file exists with backend automation sections', () => {
 test('app route points settings path to Settings page', () => {
   const source = readFileSync(appPath, 'utf8');
 
-  assert.ok(source.includes("import Settings from './pages/Settings'"));
+  assert.ok(source.includes("const Settings = lazy(() => import('./pages/Settings'));"));
+  assert.ok(source.includes('<Suspense'));
   assert.ok(source.includes('<Route path="/settings" element={<Settings />} />'));
 });
