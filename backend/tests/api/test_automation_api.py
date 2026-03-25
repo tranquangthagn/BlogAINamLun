@@ -7,6 +7,16 @@ def test_put_settings_persists_mysql_backed_configuration(client, automation_set
 
     assert response.status_code == 200
     assert response.json()["enabled"] is True
+    assert response.json()["tone"] == "gan_gui"
+    assert response.json()["focusPrompt"] == "uu tien goc nhin cho nguoi moi bat dau"
+
+
+def test_get_settings_returns_light_generation_control_defaults(client):
+    response = client.get("/api/automation/settings")
+
+    assert response.status_code == 200
+    assert response.json()["tone"] == "trung_tinh"
+    assert response.json()["focusPrompt"] == ""
 
 
 def test_preview_returns_soft_failure_when_gemini_quota_is_exhausted(client, automation_settings_payload, monkeypatch):

@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   DatePicker,
+  Input,
   InputNumber,
   message,
   Switch,
@@ -38,6 +39,7 @@ import {
   fixedTimeTopResultsCount,
   validateAutomationSettings,
   type AutomationSettings,
+  type AutomationTone,
   type GeneratedPostHistoryItem,
   type ScheduleMode,
   type TrendRangeMode,
@@ -83,6 +85,17 @@ const SCHEDULE_OPTIONS: Array<{
     label: 'Mấy phút một lần',
     caption: 'Mỗi chu kỳ chỉ chọn 1 kết quả tốt nhất ở thời điểm hiện tại để đăng.',
   },
+];
+
+const TONE_OPTIONS: Array<{
+  value: AutomationTone;
+  label: string;
+  caption: string;
+}> = [
+  { value: 'trung_tinh', label: 'Trung tinh', caption: 'Giu giong viet can bang va de dung lai.' },
+  { value: 'gan_gui', label: 'Gan gui', caption: 'Viet mem hon, de doc va de dong cam.' },
+  { value: 'thuc_dung', label: 'Thuc dung', caption: 'Uu tien meo ro rang va gia tri ap dung.' },
+  { value: 'bat_trend', label: 'Bat trend', caption: 'Hook nhanh hon va dam chat xu huong.' },
 ];
 
 function emitAutomationChanged() {
@@ -535,6 +548,48 @@ const Settings: React.FC = () => {
             </Card>
           </motion.div>
 
+          <motion.div {...cardMotion} transition={{ delay: 0.19 }}>
+            <Card className="settings-card settings-voice-card">
+              <div className="settings-card__header">
+                <Sparkles size={18} />
+                <Title level={3}>Goc viet bai</Title>
+              </div>
+              <Paragraph className="settings-muted">
+                Chon tone nhe va them 1 focus prompt ngan de AI viet bai dung chat hon o luot generate tiep theo.
+              </Paragraph>
+
+              <div className="range-grid">
+                {TONE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`range-card ${settings.tone === option.value ? 'active' : ''}`}
+                    onClick={() => updateSettings({ ...settings, tone: option.value })}
+                  >
+                    <strong>{option.label}</strong>
+                    <span>{option.caption}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="settings-focus-prompt">
+                <Text strong>Focus prompt ngan</Text>
+                <Input.TextArea
+                  value={settings.focusPrompt}
+                  rows={3}
+                  maxLength={180}
+                  placeholder="Vi du: uu tien goc nhin cho nguoi moi bat dau"
+                  onChange={(event) =>
+                    updateSettings({
+                      ...settings,
+                      focusPrompt: event.target.value,
+                    })
+                  }
+                />
+              </div>
+            </Card>
+          </motion.div>
+
           <motion.div {...cardMotion} transition={{ delay: 0.2 }}>
             <Card className="settings-card">
               <div className="settings-card__header">
@@ -621,6 +676,30 @@ const Settings: React.FC = () => {
                       </div>
                       <Title level={4}>{preview.title}</Title>
                       <Paragraph>{preview.content}</Paragraph>
+                      {preview.insights.length > 0 && (
+                        <div className="preview-insights">
+                          <strong>AI dang dua tren</strong>
+                          <div className="preview-insights__list">
+                            {preview.insights.map((insight, insightIndex) => (
+                              <div
+                                key={`${preview.id}-${insight.title}-${insightIndex}`}
+                                className="preview-insights__item"
+                              >
+                                <span className="preview-insights__score">
+                                  Tin hieu {Math.round(insight.score * 100)}%
+                                </span>
+                                <strong>{insight.title}</strong>
+                                {insight.summary && <span>{insight.summary}</span>}
+                                {insight.url && (
+                                  <a href={insight.url} target="_blank" rel="noreferrer">
+                                    Mo nguon
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </motion.div>
                   ))}
                 </div>

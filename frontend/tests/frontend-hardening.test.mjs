@@ -61,3 +61,17 @@ test('vite config defines chunk splitting for the frontend build', () => {
 
   assert.ok(source.includes('manualChunks'));
 });
+
+test('automation settings support lightweight tone controls and focus prompt', () => {
+  const source = read('src/data/automationSettings.ts');
+
+  assert.ok(source.includes("tone: 'trung_tinh'"));
+  assert.ok(source.includes('focusPrompt:'));
+});
+
+test('automation api forwards tone and focus prompt to backend settings payload', () => {
+  const source = read('src/api/automation.ts');
+
+  assert.ok(source.includes('tone: settings.tone'));
+  assert.ok(source.includes('focusPrompt: settings.focusPrompt'));
+});

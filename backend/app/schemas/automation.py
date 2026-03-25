@@ -1,5 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.automation_generation import PreviewInsight
+
 
 class CustomDateRangePayload(BaseModel):
     start: str | None = None
@@ -14,6 +16,8 @@ class AutomationSettingsPayload(BaseModel):
     sources: list[str]
     trend_range_mode: str = Field(alias="trendRangeMode")
     custom_date_range: CustomDateRangePayload = Field(alias="customDateRange")
+    tone: str = "trung_tinh"
+    focus_prompt: str = Field(default="", alias="focusPrompt")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -32,5 +36,6 @@ class AutomationPreviewResponse(BaseModel):
     created_at: str = Field(alias="createdAt")
     posted: bool
     category: str
+    insights: list[PreviewInsight] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True)

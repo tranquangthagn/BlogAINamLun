@@ -21,6 +21,7 @@ def test_generated_candidate_carries_fallback_metadata():
         source="tiktok",
         category="general",
         topic_key="creator-hook",
+        insights=[],
         fallback_used=False,
     )
 
@@ -109,6 +110,7 @@ def test_gemini_wrapper_parses_structured_candidate():
 
     assert candidate.title == "AI title"
     assert candidate.source == "tiktok"
+    assert candidate.insights[0].title == "Hot creator hook"
     assert candidate.fallback_used is False
 
 

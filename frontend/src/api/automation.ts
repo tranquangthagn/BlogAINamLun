@@ -14,6 +14,8 @@ function toSettingsPayload(settings: AutomationSettings) {
     sources: settings.sources,
     trendRangeMode: settings.trendRangeMode,
     customDateRange: settings.customDateRange,
+    tone: settings.tone,
+    focusPrompt: settings.focusPrompt,
   };
 }
 

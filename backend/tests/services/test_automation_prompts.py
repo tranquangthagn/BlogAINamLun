@@ -8,6 +8,8 @@ def test_prompt_builder_limits_signal_count_and_mentions_range():
         source_label="TikTok",
         trend_range_mode="week",
         range_label="7 ngay gan day",
+        tone="gan_gui",
+        focus_prompt="uu tien nguoi moi bat dau",
     )
     signals = [
         TrendSignal(source="tiktok", title="Trend A", score=0.9),
@@ -20,5 +22,7 @@ def test_prompt_builder_limits_signal_count_and_mentions_range():
 
     assert "TikTok" in prompt
     assert "7 ngay gan day" in prompt
+    assert "gan gui" in prompt
+    assert "nguoi moi bat dau" in prompt
     assert prompt.count("Trend:") == 3
     assert "Trend D" not in prompt

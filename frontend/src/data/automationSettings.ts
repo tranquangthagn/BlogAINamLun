@@ -3,6 +3,15 @@ import type { Post } from '../types/post';
 export type TrendSource = 'facebook' | 'tiktok' | 'instagram' | 'shopee' | 'threads';
 export type TrendRangeMode = 'day' | 'week' | 'quarter' | 'custom';
 export type ScheduleMode = 'fixed_time' | 'interval_minutes';
+export type AutomationTone = 'trung_tinh' | 'gan_gui' | 'thuc_dung' | 'bat_trend';
+
+export interface AutomationPreviewInsight {
+  title: string;
+  summary: string | null;
+  url: string | null;
+  score: number;
+  publishedAt: string | null;
+}
 
 export interface AutomationSettings {
   enabled: boolean;
@@ -15,6 +24,8 @@ export interface AutomationSettings {
     start: string | null;
     end: string | null;
   };
+  tone: AutomationTone;
+  focusPrompt: string;
   lastRunAt: string | null;
   lastGeneratedPostId: number | null;
 }
@@ -28,6 +39,7 @@ export interface GeneratedPostHistoryItem {
   createdAt: string;
   posted: boolean;
   category: Post['category'];
+  insights: AutomationPreviewInsight[];
 }
 
 export interface AutomationPreview extends GeneratedPostHistoryItem {
@@ -263,6 +275,7 @@ function createSingleCandidate(
     createdAt: nowIso,
     posted: false,
     category: chosen.category,
+    insights: [],
   };
 
   return {
@@ -283,6 +296,8 @@ export function createDefaultAutomationSettings(): AutomationSettings {
       start: null,
       end: null,
     },
+    tone: 'trung_tinh',
+    focusPrompt: '',
     lastRunAt: null,
     lastGeneratedPostId: null,
   };

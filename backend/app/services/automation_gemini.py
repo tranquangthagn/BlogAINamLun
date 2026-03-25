@@ -8,6 +8,7 @@ from app.core.config import Settings, get_settings
 from app.schemas.automation_generation import (
     GeneratedCandidate,
     GenerationDiagnostics,
+    PreviewInsight,
     TrendRequestContext,
     TrendSignal,
 )
@@ -73,6 +74,7 @@ class GeminiContentGenerator:
                 source=context.sources[0],
                 category=self._coerce_text(payload.get("category"), fallback="general"),
                 topic_key=self._coerce_topic_key(payload.get("topic_key"), default=context.sources[0]),
+                insights=self._build_insights(signals),
                 fallback_used=False,
                 diagnostics=GenerationDiagnostics(
                     provider_mode=self.settings.automation_provider_mode,
@@ -102,3 +104,15 @@ class GeminiContentGenerator:
         if normalized:
             return normalized
         return re.sub(r"[^a-z0-9]+", "-", fallback.lower()).strip("-") or "automation"
+
+    def _build_insights(self, signals: list[TrendSignal]) -> list[PreviewInsight]:
+        return [
+            PreviewInsight(
+                title=signal.title,
+                summary=signal.summary,
+                url=signal.url,
+                score=signal.score,
+                published_at=signal.published_at,
+            )
+            for signal in signals
+        ]

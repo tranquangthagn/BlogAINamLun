@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TrendSignal(BaseModel):
@@ -18,6 +18,8 @@ class TrendRequestContext(BaseModel):
     source_label: str
     trend_range_mode: str
     range_label: str
+    tone: str = "trung_tinh"
+    focus_prompt: str = ""
     custom_start: date | None = None
     custom_end: date | None = None
 
@@ -28,12 +30,21 @@ class GenerationDiagnostics(BaseModel):
     fallback_reason: str | None = None
 
 
+class PreviewInsight(BaseModel):
+    title: str
+    summary: str | None = None
+    url: str | None = None
+    score: float
+    published_at: datetime | None = None
+
+
 class GeneratedCandidate(BaseModel):
     title: str
     content: str
     source: str
     category: str
     topic_key: str
+    insights: list[PreviewInsight] = Field(default_factory=list)
     fallback_used: bool = False
     diagnostics: GenerationDiagnostics | None = None
 

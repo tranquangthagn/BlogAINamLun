@@ -77,4 +77,6 @@ def automation_settings_payload():
         "sources": ["tiktok", "threads"],
         "trendRangeMode": "week",
         "customDateRange": {"start": None, "end": None},
+        "tone": "gan_gui",
+        "focusPrompt": "uu tien goc nhin cho nguoi moi bat dau",
     }

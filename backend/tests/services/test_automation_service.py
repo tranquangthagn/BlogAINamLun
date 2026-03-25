@@ -78,3 +78,27 @@ def test_post_now_from_settings_uses_generated_candidate_pipeline(db_session, au
 
     assert "AI Trend A" in post.content
     assert history[0].posted is True
+
+
+def test_generate_preview_carries_selected_trend_insights(db_session, automation_settings_payload):
+    service = AutomationService(
+        db_session,
+        trends=StubTrendCoordinator(
+            [
+                TrendSignal(
+                    source="tiktok",
+                    title="Trend A",
+                    summary="Tom tat cho trend A",
+                    url="https://example.com/trend-a",
+                    score=0.9,
+                )
+            ]
+        ),
+        generator=StubGenerator(),
+    )
+
+    preview = service.generate_preview_candidates(settings_payload=automation_settings_payload)[0]
+
+    assert preview.insights[0].title == "Trend A"
+    assert preview.insights[0].summary == "Tom tat cho trend A"
+    assert preview.insights[0].url == "https://example.com/trend-a"

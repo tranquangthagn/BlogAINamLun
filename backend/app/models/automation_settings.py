@@ -16,6 +16,8 @@ class AutomationSettings(Base):
     interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     sources: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     trend_range_mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    tone: Mapped[str] = mapped_column(String(32), nullable=False, default="trung_tinh")
+    focus_prompt: Mapped[str] = mapped_column(String(280), nullable=False, default="")
     custom_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     custom_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

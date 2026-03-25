@@ -13,7 +13,7 @@ from app.schemas.automation import (
     AutomationSettingsPayload,
     AutomationSettingsResponse,
 )
-from app.schemas.automation_generation import GeneratedCandidate, TrendRequestContext
+from app.schemas.automation_generation import GeneratedCandidate, PreviewInsight, TrendRequestContext, TrendSignal
 from app.services.posts import serialize_post
 from app.services.automation_gemini import AutomationGenerationError, GeminiContentGenerator
 from app.services.automation_trends import AutomationTrendCoordinator
@@ -87,6 +87,8 @@ class AutomationService:
             interval_minutes=30,
             sources=["tiktok", "threads"],
             trend_range_mode="week",
+            tone="trung_tinh",
+            focus_prompt="",
             custom_start=None,
             custom_end=None,
             last_run_at=None,
@@ -118,6 +120,8 @@ class AutomationService:
             intervalMinutes=settings.interval_minutes,
             sources=settings.sources,
             trendRangeMode=settings.trend_range_mode,
+            tone=settings.tone,
+            focusPrompt=settings.focus_prompt,
             customDateRange={
                 "start": settings.custom_start.isoformat() if settings.custom_start else None,
                 "end": settings.custom_end.isoformat() if settings.custom_end else None,
@@ -143,6 +147,8 @@ class AutomationService:
         settings.interval_minutes = payload.interval_minutes
         settings.sources = payload.sources
         settings.trend_range_mode = payload.trend_range_mode
+        settings.tone = payload.tone
+        settings.focus_prompt = payload.focus_prompt
         settings.custom_start = (
             date.fromisoformat(payload.custom_date_range.start) if payload.custom_date_range.start else None
         )
@@ -165,6 +171,7 @@ class AutomationService:
                 createdAt=item.created_at.isoformat(),
                 posted=item.posted,
                 category=item.category,
+                insights=[],
             )
             for item in self.repository.list_history()
         ]
@@ -176,6 +183,8 @@ class AutomationService:
             source_label=SOURCE_LABELS.get(primary_source, primary_source.title()),
             trend_range_mode=payload.trend_range_mode,
             range_label=self._range_label(payload),
+            tone=payload.tone,
+            focus_prompt=payload.focus_prompt,
             custom_start=date.fromisoformat(payload.custom_date_range.start)
             if payload.custom_date_range.start
             else None,
@@ -197,7 +206,20 @@ class AutomationService:
             createdAt=created_at or datetime.now().isoformat(),
             posted=False,
             category=candidate.category,
+            insights=candidate.insights,
         )
+
+    def _insights_from_signals(self, signals: list[TrendSignal]) -> list[PreviewInsight]:
+        return [
+            PreviewInsight(
+                title=signal.title,
+                summary=signal.summary,
+                url=signal.url,
+                score=signal.score,
+                published_at=signal.published_at,
+            )
+            for signal in signals
+        ]
 
     def generate_preview_candidates(
         self,
@@ -214,11 +236,15 @@ class AutomationService:
 
         for signal in signals:
             candidate = self.generator.generate(context, [signal])
+            if not candidate.insights:
+                candidate = candidate.model_copy(update={"insights": self._insights_from_signals([signal])})
             if title_fingerprint(candidate.title) in recent_titles:
                 continue
             return [self._preview_from_candidate(candidate, preview_id=next_id)]
 
         candidate = self.generator.generate(context, [signals[0]])
+        if not candidate.insights:
+            candidate = candidate.model_copy(update={"insights": self._insights_from_signals([signals[0]])})
         return [self._preview_from_candidate(candidate, preview_id=next_id)]
 
     def record_candidates(self, previews: list[AutomationPreviewResponse]) -> list[AutomationPreviewResponse]:
