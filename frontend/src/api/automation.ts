@@ -1,8 +1,9 @@
 import type {
+  AutomationBatchReceipt,
+  AutomationPreviewBatch,
   AutomationSettings,
   GeneratedPostHistoryItem,
 } from '../data/automationSettings';
-import type { Post } from '../types/post';
 import { requestJson } from './client';
 
 function toSettingsPayload(settings: AutomationSettings) {
@@ -38,15 +39,15 @@ export async function listAutomationHistory(): Promise<GeneratedPostHistoryItem[
 
 export async function previewAutomationCandidates(
   settings: AutomationSettings,
-): Promise<GeneratedPostHistoryItem[]> {
-  return requestJson<GeneratedPostHistoryItem[]>('/api/automation/preview', {
+): Promise<AutomationPreviewBatch> {
+  return requestJson<AutomationPreviewBatch>('/api/automation/preview', {
     method: 'POST',
     body: JSON.stringify(toSettingsPayload(settings)),
   });
 }
 
-export async function postAutomationNow(): Promise<Post> {
-  return requestJson<Post>('/api/automation/post-now', {
+export async function postAutomationNow(): Promise<AutomationBatchReceipt> {
+  return requestJson<AutomationBatchReceipt>('/api/automation/post-now', {
     method: 'POST',
   });
 }

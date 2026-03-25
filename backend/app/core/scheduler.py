@@ -5,8 +5,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.services.automation_gemini import AutomationGenerationError
 from app.services.automation import AutomationService
+from app.services.automation_gemini import AutomationGenerationError
 
 
 @dataclass
@@ -46,7 +46,7 @@ def run_scheduler_tick(session: Session) -> SchedulerTickResult:
     except AutomationGenerationError:
         return SchedulerTickResult(executed=False, reason="generation_failed")
 
-    return SchedulerTickResult(executed=True, reason="published")
+    return SchedulerTickResult(executed=True, reason="queued")
 
 
 def create_scheduler(session_factory) -> BackgroundScheduler:

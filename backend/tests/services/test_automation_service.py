@@ -1,6 +1,6 @@
 import pytest
 
-from app.schemas.automation_generation import GeneratedCandidate, TrendSignal
+from app.schemas.automation_generation import AutomationBatchPlan, GeneratedCandidate, TrendSignal
 from app.services.automation import AutomationService
 from app.services.automation_gemini import AutomationQuotaError
 
@@ -21,32 +21,32 @@ class StubGenerator:
         self.calls += 1
         primary_signal = signals[0]
         return GeneratedCandidate(
-            title=f"AI {primary_signal.title}",
-            content=f"Noi dung cho {primary_signal.title}",
-            source=context.sources[0],
-            category=primary_signal.category_hint or "general",
-            topic_key=primary_signal.title.lower().replace(" ", "-"),
+            title=f"Bài {context.category} từ {primary_signal.title}",
+            content=f"Nội dung có dấu cho {context.category}",
+            source=context.source,
+            category=context.category,
+            topic_key=f"{context.category}-{self.calls}",
             fallback_used=False,
         )
 
 
-def test_generate_preview_avoids_recent_duplicate_title(db_session, automation_settings_payload):
+def test_generate_preview_returns_three_posts_per_source(db_session, automation_settings_payload):
     service = AutomationService(
         db_session,
         trends=StubTrendCoordinator(
             [
                 TrendSignal(source="tiktok", title="Trend A", score=0.9),
-                TrendSignal(source="tiktok", title="Trend B", score=0.8),
             ]
         ),
         generator=StubGenerator(),
     )
 
-    first = service.generate_preview_candidates(settings_payload=automation_settings_payload)
-    service.record_candidates(first)
-    second = service.generate_preview_candidates(settings_payload=automation_settings_payload)
+    preview = service.generate_preview_candidates(settings_payload=automation_settings_payload)
 
-    assert first[0].title != second[0].title
+    assert preview.batch_id.startswith("batch-")
+    assert len(preview.items) == 6
+    assert {item.category for item in preview.items[:3]} == {"fashion", "health", "tips"}
+    assert all(item.images for item in preview.items)
 
 
 class ErroringGenerator:
@@ -65,7 +65,7 @@ def test_generate_preview_propagates_generation_failures(db_session, automation_
         service.generate_preview_candidates(settings_payload=automation_settings_payload)
 
 
-def test_post_now_from_settings_uses_generated_candidate_pipeline(db_session, automation_settings_payload):
+def test_post_now_from_settings_returns_batch_receipt(db_session, automation_settings_payload, monkeypatch):
     service = AutomationService(
         db_session,
         trends=StubTrendCoordinator([TrendSignal(source="tiktok", title="Trend A", score=0.9)]),
@@ -73,14 +73,25 @@ def test_post_now_from_settings_uses_generated_candidate_pipeline(db_session, au
     )
     service.update_settings(automation_settings_payload)
 
-    post = service.post_now_from_settings()
+    enqueued = {}
+
+    class RunnerStub:
+        def enqueue(self, plans, start_async=True):
+            enqueued["plans"] = plans
+            enqueued["start_async"] = start_async
+
+    monkeypatch.setattr("app.services.automation.get_automation_runner", lambda: RunnerStub())
+
+    receipt = service.post_now_from_settings(start_async=False)
     history = service.list_history()
 
-    assert "AI Trend A" in post.content
-    assert history[0].posted is True
+    assert receipt.mode == "queued"
+    assert receipt.queued_count == 6
+    assert len(enqueued["plans"]) == 6
+    assert all(item.status == "queued" for item in history[:6])
 
 
-def test_generate_preview_carries_selected_trend_insights(db_session, automation_settings_payload):
+def test_process_batch_job_publishes_post_and_updates_history(db_session):
     service = AutomationService(
         db_session,
         trends=StubTrendCoordinator(
@@ -88,17 +99,47 @@ def test_generate_preview_carries_selected_trend_insights(db_session, automation
                 TrendSignal(
                     source="tiktok",
                     title="Trend A",
-                    summary="Tom tat cho trend A",
-                    url="https://example.com/trend-a",
+                    summary="Tóm tắt đẹp",
                     score=0.9,
+                    image_url="https://example.com/thumb.jpg",
                 )
             ]
         ),
         generator=StubGenerator(),
     )
+    receipt = service.queue_batch_from_settings(
+        settings_payload={
+            "enabled": True,
+            "scheduleMode": "fixed_time",
+            "postTime": "08:00",
+            "intervalMinutes": 30,
+            "sources": ["tiktok"],
+            "trendRangeMode": "week",
+            "customDateRange": {"start": None, "end": None},
+            "tone": "gan_gui",
+            "focusPrompt": "uu tien goc nhin nhe nhang",
+        },
+        start_async=False,
+    )
+    history_item = service.list_history()[0]
 
-    preview = service.generate_preview_candidates(settings_payload=automation_settings_payload)[0]
+    plan = AutomationBatchPlan(
+        batch_id=receipt.batch_id,
+        source=history_item.source,
+        source_label="TikTok",
+        category=history_item.category,
+        tone="gan_gui",
+        focus_prompt="uu tien goc nhin nhe nhang",
+        trend_range_mode="week",
+        range_label="7 ngày gần đây",
+        audience_profile="nu tre 18-25",
+        allow_audience_expansion=True,
+        history_id=history_item.id,
+    )
 
-    assert preview.insights[0].title == "Trend A"
-    assert preview.insights[0].summary == "Tom tat cho trend A"
-    assert preview.insights[0].url == "https://example.com/trend-a"
+    service.process_batch_job(plan)
+    refreshed = service.get_history_item(history_item.id)
+
+    assert refreshed.posted is True
+    assert refreshed.status == "published"
+    assert refreshed.image_urls_json is not None

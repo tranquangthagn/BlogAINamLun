@@ -1,65 +1,35 @@
-from datetime import date, datetime
+import json
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.models.automation_history import AutomationHistory
 from app.models.automation_settings import AutomationSettings
 from app.models.post import Post
+from app.models.post_image import PostImage
 from app.repositories.automation import AutomationRepository
 from app.repositories.posts import PostsRepository
-from app.schemas.posts import PostResponse
 from app.schemas.automation import (
-    AutomationPreviewResponse,
+    AutomationBatchItemResponse,
+    AutomationBatchReceiptResponse,
+    AutomationPreviewBatchResponse,
     AutomationSettingsPayload,
     AutomationSettingsResponse,
 )
-from app.schemas.automation_generation import GeneratedCandidate, PreviewInsight, TrendRequestContext, TrendSignal
-from app.services.posts import serialize_post
+from app.schemas.automation_generation import (
+    AutomationBatchPlan,
+    AutomationBatchReceipt,
+    GeneratedCandidate,
+    PreviewInsight,
+    TrendRequestContext,
+    TrendSignal,
+)
+from app.services.automation_batch import AutomationBatchPlanner
 from app.services.automation_gemini import AutomationGenerationError, GeminiContentGenerator
+from app.services.automation_images import AutomationImageProvider
+from app.services.automation_runner import get_automation_runner
 from app.services.automation_trends import AutomationTrendCoordinator
-
-
-TOPIC_TEMPLATES = [
-    {
-        "topic_key": "short-form-hook",
-        "category": "general",
-        "title": lambda source, range_label: f"{source} dang chuong mo bai cham cam xuc trong {range_label}",
-        "content": lambda source, range_label: f"Tin hieu mo phong tu {source} trong {range_label} cho thay kieu mo bai doi thuong dang giu nhip tuong tac kha tot.",
-    },
-    {
-        "topic_key": "beauty-routine",
-        "category": "fashion",
-        "title": lambda source, range_label: f"Trend lam dep toi gian tu {source} noi bat trong {range_label}",
-        "content": lambda source, range_label: f"Du lieu mo phong tu {source} trong {range_label} dang nghieng ve noi dung cham chut ve ngoai toi gian va de ap dung ngay.",
-    },
-    {
-        "topic_key": "healthy-reset",
-        "category": "health",
-        "title": lambda source, range_label: f"{source} dang day manh noi dung reset nang luong trong {range_label}",
-        "content": lambda source, range_label: f"Trong {range_label}, {source} noi len cac chu de xoay quanh phuc hoi nang luong va cham soc suc khoe.",
-    },
-    {
-        "topic_key": "smart-saving-tip",
-        "category": "tips",
-        "title": lambda source, range_label: f"Meo chi tieu thong minh tu trend {source} trong {range_label}",
-        "content": lambda source, range_label: f"Trend mo phong tren {source} trong {range_label} cho thay nguoi xem quan tam cac meo thuc dung va de ap dung.",
-    },
-]
-
-SOURCE_LABELS = {
-    "facebook": "Facebook",
-    "tiktok": "TikTok",
-    "instagram": "Instagram",
-    "shopee": "Shopee",
-    "threads": "Threads",
-}
-
-RANGE_LABELS = {
-    "day": "hom nay",
-    "week": "7 ngay gan day",
-    "quarter": "quy nay",
-    "custom": "khoang ngay da chon",
-}
+from app.services.posts import serialize_post
 
 
 def title_fingerprint(title: str) -> str:
@@ -72,12 +42,16 @@ class AutomationService:
         session: Session,
         trends: AutomationTrendCoordinator | None = None,
         generator: GeminiContentGenerator | None = None,
+        planner: AutomationBatchPlanner | None = None,
+        images: AutomationImageProvider | None = None,
     ):
         self.session = session
         self.repository = AutomationRepository(session)
         self.posts_repository = PostsRepository(session)
         self.trends = trends or AutomationTrendCoordinator()
         self.generator = generator or GeminiContentGenerator()
+        self.planner = planner or AutomationBatchPlanner()
+        self.images = images or AutomationImageProvider()
 
     def _default_settings(self) -> AutomationSettings:
         return AutomationSettings(
@@ -87,7 +61,7 @@ class AutomationService:
             interval_minutes=30,
             sources=["tiktok", "threads"],
             trend_range_mode="week",
-            tone="trung_tinh",
+            tone="gan_gui",
             focus_prompt="",
             custom_start=None,
             custom_end=None,
@@ -104,13 +78,6 @@ class AutomationService:
             self.session.commit()
             self.session.refresh(settings)
         return settings
-
-    def _range_label(self, payload: AutomationSettingsPayload) -> str:
-        if payload.trend_range_mode != "custom":
-            return RANGE_LABELS[payload.trend_range_mode]
-        if payload.custom_date_range.start and payload.custom_date_range.end:
-            return f"{payload.custom_date_range.start} den {payload.custom_date_range.end}"
-        return RANGE_LABELS["custom"]
 
     def _to_settings_response(self, settings: AutomationSettings) -> AutomationSettingsResponse:
         return AutomationSettingsResponse(
@@ -149,10 +116,12 @@ class AutomationService:
         settings.trend_range_mode = payload.trend_range_mode
         settings.tone = payload.tone
         settings.focus_prompt = payload.focus_prompt
-        settings.custom_start = (
-            date.fromisoformat(payload.custom_date_range.start) if payload.custom_date_range.start else None
-        )
-        settings.custom_end = date.fromisoformat(payload.custom_date_range.end) if payload.custom_date_range.end else None
+        settings.custom_start = payload.custom_date_range.start and datetime.fromisoformat(
+            f"{payload.custom_date_range.start}T00:00:00"
+        ).date()
+        settings.custom_end = payload.custom_date_range.end and datetime.fromisoformat(
+            f"{payload.custom_date_range.end}T00:00:00"
+        ).date()
         settings.updated_at = datetime.now()
 
         self.repository.save_settings(settings)
@@ -160,103 +129,132 @@ class AutomationService:
         self.session.refresh(settings)
         return self._to_settings_response(settings)
 
-    def list_history(self) -> list[AutomationPreviewResponse]:
-        return [
-            AutomationPreviewResponse(
-                id=item.id,
-                title=item.title,
-                content=item.content,
-                source=item.source,
-                topicKey=item.topic_key,
-                createdAt=item.created_at.isoformat(),
-                posted=item.posted,
-                category=item.category,
-                insights=[],
-            )
-            for item in self.repository.list_history()
-        ]
+    def _deserialize_images(self, raw_value: str | None) -> list[str]:
+        if not raw_value:
+            return []
+        try:
+            payload = json.loads(raw_value)
+        except json.JSONDecodeError:
+            return []
+        return [item for item in payload if isinstance(item, str)]
 
-    def _build_request_context(self, payload: AutomationSettingsPayload) -> TrendRequestContext:
-        primary_source = payload.sources[0]
+    def _history_to_response(
+        self,
+        item: AutomationHistory,
+        insights: list[PreviewInsight] | None = None,
+    ) -> AutomationBatchItemResponse:
+        return AutomationBatchItemResponse(
+            id=item.id,
+            batchId=item.batch_id or "",
+            title=item.title,
+            content=item.content,
+            source=item.source,
+            topicKey=item.topic_key,
+            createdAt=item.created_at.isoformat(),
+            posted=item.posted,
+            category=item.category,
+            status=item.status,
+            failureReason=item.failure_reason,
+            images=self._deserialize_images(item.image_urls_json),
+            insights=insights or [],
+        )
+
+    def list_history(self) -> list[AutomationBatchItemResponse]:
+        return [self._history_to_response(item) for item in self.repository.list_history()]
+
+    def _build_request_context(self, plan: AutomationBatchPlan) -> TrendRequestContext:
         return TrendRequestContext(
-            sources=payload.sources,
-            source_label=SOURCE_LABELS.get(primary_source, primary_source.title()),
-            trend_range_mode=payload.trend_range_mode,
-            range_label=self._range_label(payload),
-            tone=payload.tone,
-            focus_prompt=payload.focus_prompt,
-            custom_start=date.fromisoformat(payload.custom_date_range.start)
-            if payload.custom_date_range.start
-            else None,
-            custom_end=date.fromisoformat(payload.custom_date_range.end) if payload.custom_date_range.end else None,
+            source=plan.source,
+            sources=[plan.source],
+            source_label=plan.source_label,
+            category=plan.category,
+            trend_range_mode=plan.trend_range_mode,
+            range_label=plan.range_label,
+            tone=plan.tone,
+            focus_prompt=plan.focus_prompt,
+            audience_profile=plan.audience_profile,
+            allow_audience_expansion=plan.allow_audience_expansion,
+            custom_start=plan.custom_start,
+            custom_end=plan.custom_end,
         )
 
-    def _preview_from_candidate(
-        self,
-        candidate: GeneratedCandidate,
-        preview_id: int,
-        created_at: str | None = None,
-    ) -> AutomationPreviewResponse:
-        return AutomationPreviewResponse(
-            id=preview_id,
-            title=candidate.title,
-            content=candidate.content,
-            source=candidate.source,
-            topicKey=candidate.topic_key,
-            createdAt=created_at or datetime.now().isoformat(),
-            posted=False,
-            category=candidate.category,
-            insights=candidate.insights,
-        )
-
-    def _insights_from_signals(self, signals: list[TrendSignal]) -> list[PreviewInsight]:
-        return [
-            PreviewInsight(
-                title=signal.title,
-                summary=signal.summary,
-                url=signal.url,
-                score=signal.score,
-                published_at=signal.published_at,
-            )
-            for signal in signals
-        ]
-
-    def generate_preview_candidates(
-        self,
-        settings_payload: dict | AutomationSettingsPayload | None = None,
-    ) -> list[AutomationPreviewResponse]:
-        payload = self._coerce_payload(settings_payload or self.get_settings().model_dump(by_alias=True))
-        history = self.repository.list_history()
-        recent_titles = {title_fingerprint(item.title) for item in history[:8]}
-        next_id = max([item.id for item in history], default=0) + 1
-        context = self._build_request_context(payload)
+    def _generate_candidate_for_plan(self, plan: AutomationBatchPlan) -> tuple[GeneratedCandidate, list[TrendSignal]]:
+        context = self._build_request_context(plan)
         signals = self.trends.collect(context)
         if not signals:
             raise AutomationGenerationError("No usable trend signals found")
 
-        for signal in signals:
-            candidate = self.generator.generate(context, [signal])
-            if not candidate.insights:
-                candidate = candidate.model_copy(update={"insights": self._insights_from_signals([signal])})
+        signal = signals[0]
+        candidate = self.generator.generate(context, [signal])
+        images = self.images.resolve_images(plan.source, plan.category, signal)
+        candidate = candidate.model_copy(
+            update={
+                "source": plan.source,
+                "category": plan.category,
+                "images": images,
+            }
+        )
+        return candidate, [signal]
+
+    def generate_preview_candidates(
+        self,
+        settings_payload: dict | AutomationSettingsPayload | None = None,
+    ) -> AutomationPreviewBatchResponse:
+        payload = self._coerce_payload(settings_payload or self.get_settings().model_dump(by_alias=True))
+        plans = self.planner.plan(payload)
+        now = datetime.now()
+        next_id = max([item.id for item in self.repository.list_history()], default=0) + 1
+        items: list[AutomationBatchItemResponse] = []
+        recent_titles = {title_fingerprint(item.title) for item in self.repository.list_history()[:12] if item.title}
+
+        for index, plan in enumerate(plans):
+            candidate, signals = self._generate_candidate_for_plan(plan)
             if title_fingerprint(candidate.title) in recent_titles:
-                continue
-            return [self._preview_from_candidate(candidate, preview_id=next_id)]
+                candidate = candidate.model_copy(update={"title": f"{candidate.title} ({plan.category})"})
+            preview_id = next_id + index
+            items.append(
+                AutomationBatchItemResponse(
+                    id=preview_id,
+                    batchId=plan.batch_id,
+                    title=candidate.title,
+                    content=candidate.content,
+                    source=candidate.source,
+                    topicKey=candidate.topic_key,
+                    createdAt=(now).isoformat(),
+                    posted=False,
+                    category=candidate.category,
+                    status="preview",
+                    failureReason=None,
+                    images=candidate.images,
+                    insights=[
+                        PreviewInsight(
+                            title=signal.title,
+                            summary=signal.summary,
+                            url=signal.url,
+                            score=signal.score,
+                            published_at=signal.published_at,
+                        )
+                        for signal in signals
+                    ],
+                )
+            )
 
-        candidate = self.generator.generate(context, [signals[0]])
-        if not candidate.insights:
-            candidate = candidate.model_copy(update={"insights": self._insights_from_signals([signals[0]])})
-        return [self._preview_from_candidate(candidate, preview_id=next_id)]
+        return AutomationPreviewBatchResponse(batchId=plans[0].batch_id if plans else "", items=items)
 
-    def record_candidates(self, previews: list[AutomationPreviewResponse]) -> list[AutomationPreviewResponse]:
+    def record_candidates(self, previews: list[AutomationBatchItemResponse]) -> list[AutomationBatchItemResponse]:
         for preview in previews:
             self.repository.add_history_item(
                 AutomationHistory(
                     id=preview.id,
+                    batch_id=preview.batch_id,
                     title=preview.title,
                     content=preview.content,
                     source=preview.source,
                     topic_key=preview.topic_key,
                     category=preview.category,
+                    status=preview.status,
+                    failure_reason=preview.failure_reason,
+                    image_urls_json=json.dumps(preview.images),
                     created_at=datetime.fromisoformat(preview.created_at),
                     posted=preview.posted,
                     published_post_id=None,
@@ -271,11 +269,9 @@ class AutomationService:
             raise ValueError(f"History item {item_id} not found")
         return item
 
-    def publish_candidate_now(self, item_id: int) -> Post:
-        item = self.get_history_item(item_id)
-        settings = self._ensure_settings_row()
+    def _publish_candidate(self, item: AutomationHistory) -> Post:
         post = Post(
-            author="Tro ly AI",
+            author="Trợ lý AI",
             avatar="https://api.dicebear.com/7.x/bottts/svg?seed=NamLunAI",
             content=f"{item.title}\n\n{item.content}",
             category=item.category,
@@ -287,9 +283,21 @@ class AutomationService:
         self.posts_repository.add_post(post)
         self.session.flush()
 
+        for index, image_url in enumerate(self._deserialize_images(item.image_urls_json)):
+            post.images.append(PostImage(image_url=image_url, position=index))
+
+        self.session.flush()
+        return post
+
+    def publish_candidate_now(self, item_id: int) -> Post:
+        item = self.get_history_item(item_id)
+        post = self._publish_candidate(item)
+
+        settings = self._ensure_settings_row()
         item.posted = True
+        item.status = "published"
         item.published_post_id = post.id
-        settings.last_run_at = item.created_at
+        settings.last_run_at = datetime.now()
         settings.last_generated_post_id = item.id
         settings.updated_at = datetime.now()
 
@@ -297,9 +305,93 @@ class AutomationService:
         self.session.refresh(post)
         return post
 
-    def post_now_from_settings(self) -> PostResponse:
-        settings = self.get_settings()
-        previews = self.generate_preview_candidates(settings_payload=settings.model_dump(by_alias=True))
-        self.record_candidates(previews)
-        post = self.publish_candidate_now(previews[0].id)
+    def queue_batch_from_settings(
+        self,
+        settings_payload: dict | AutomationSettingsPayload | None = None,
+        start_async: bool = True,
+    ) -> AutomationBatchReceiptResponse:
+        payload = self._coerce_payload(settings_payload or self.get_settings().model_dump(by_alias=True))
+        plans = self.planner.plan(payload)
+        history_rows: list[AutomationHistory] = []
+        now = datetime.now()
+
+        for plan in plans:
+            history_rows.append(
+                AutomationHistory(
+                    batch_id=plan.batch_id,
+                    title="",
+                    content="",
+                    source=plan.source,
+                    topic_key=f"{plan.category}-pending",
+                    category=plan.category,
+                    status="queued",
+                    failure_reason=None,
+                    image_urls_json="[]",
+                    created_at=now,
+                    posted=False,
+                    published_post_id=None,
+                )
+            )
+
+        for row in history_rows:
+            self.repository.add_history_item(row)
+
+        self.session.commit()
+
+        for plan, row in zip(plans, history_rows, strict=False):
+            plan.history_id = row.id
+
+        receipt = AutomationBatchReceipt(
+            batch_id=plans[0].batch_id if plans else "",
+            queued_count=len(plans),
+            mode="queued",
+        )
+        get_automation_runner().enqueue(plans, start_async=start_async)
+        return AutomationBatchReceiptResponse(
+            batchId=receipt.batch_id,
+            queuedCount=receipt.queued_count,
+            mode=receipt.mode,
+        )
+
+    def post_now_from_settings(self, start_async: bool = True) -> AutomationBatchReceiptResponse:
+        return self.queue_batch_from_settings(start_async=start_async)
+
+    def process_batch_job(self, plan: AutomationBatchPlan) -> None:
+        if plan.history_id is None:
+            raise ValueError("history_id is required to process a batch job")
+
+        item = self.get_history_item(plan.history_id)
+        item.status = "processing"
+        item.failure_reason = None
+        self.session.commit()
+
+        try:
+            candidate, signals = self._generate_candidate_for_plan(plan)
+            item.title = candidate.title
+            item.content = candidate.content
+            item.topic_key = candidate.topic_key
+            item.status = "generated"
+            item.image_urls_json = json.dumps(candidate.images)
+            item.failure_reason = None
+            self.session.commit()
+
+            post = self._publish_candidate(item)
+            settings = self._ensure_settings_row()
+            item.posted = True
+            item.status = "published"
+            item.published_post_id = post.id
+            settings.last_run_at = datetime.now()
+            settings.last_generated_post_id = item.id
+            settings.updated_at = datetime.now()
+            self.session.commit()
+        except Exception as exc:
+            item.status = "failed"
+            item.failure_reason = str(exc)
+            self.session.commit()
+            if isinstance(exc, AutomationGenerationError):
+                return
+            return
+
+    def post_response_for_history_item(self, item_id: int):
+        post = self.publish_candidate_now(item_id)
         return serialize_post(post)

@@ -33,6 +33,7 @@ def test_generation_diagnostics_tracks_provider_path():
     diagnostics = GenerationDiagnostics(
         provider_mode="pragmatic_real",
         generator_model="gemini-2.5-flash",
+        audience_profile="nu tre 18-25",
         fallback_reason=None,
     )
 
@@ -62,10 +63,12 @@ class FakeClient:
 
 def build_context():
     return TrendRequestContext(
+        source="tiktok",
         sources=["tiktok"],
         source_label="TikTok",
+        category="fashion",
         trend_range_mode="week",
-        range_label="7 ngay gan day",
+        range_label="7 ngày gần đây",
     )
 
 

@@ -27,8 +27,9 @@ class AutomationSettingsResponse(AutomationSettingsPayload):
     last_generated_post_id: int | None = Field(default=None, alias="lastGeneratedPostId")
 
 
-class AutomationPreviewResponse(BaseModel):
+class AutomationBatchItemResponse(BaseModel):
     id: int
+    batch_id: str = Field(alias="batchId")
     title: str
     content: str
     source: str
@@ -36,6 +37,24 @@ class AutomationPreviewResponse(BaseModel):
     created_at: str = Field(alias="createdAt")
     posted: bool
     category: str
+    status: str
+    failure_reason: str | None = Field(default=None, alias="failureReason")
+    images: list[str] = Field(default_factory=list)
     insights: list[PreviewInsight] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AutomationPreviewBatchResponse(BaseModel):
+    batch_id: str = Field(alias="batchId")
+    items: list[AutomationBatchItemResponse]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AutomationBatchReceiptResponse(BaseModel):
+    batch_id: str = Field(alias="batchId")
+    queued_count: int = Field(alias="queuedCount")
+    mode: str = "queued"
 
     model_config = ConfigDict(populate_by_name=True)

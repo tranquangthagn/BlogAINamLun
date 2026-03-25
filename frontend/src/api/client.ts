@@ -5,9 +5,24 @@ const ERROR_MESSAGE_MAP: Record<string, string> = {
   AUTOMATION_GENERATION_FAILED: 'AI tao bai chua thanh cong. Hay thu lai them mot lan nua.',
 };
 
+function getLocalApiBaseUrl(): string | null {
+  const runtimeLocation = globalThis.location;
+  if (!runtimeLocation) {
+    return null;
+  }
+
+  const hostname = runtimeLocation.hostname;
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return null;
+  }
+
+  const protocol = runtimeLocation.protocol || 'http:';
+  return `${protocol}//${hostname}:8000`;
+}
+
 function getApiBaseUrl(): string {
   const config = globalThis as { __BLOG_API_BASE_URL__?: string };
-  return config.__BLOG_API_BASE_URL__ ?? DEFAULT_API_BASE_URL;
+  return config.__BLOG_API_BASE_URL__ ?? getLocalApiBaseUrl() ?? DEFAULT_API_BASE_URL;
 }
 
 function normalizeApiErrorMessage(message: string): string {

@@ -69,16 +69,18 @@ class GeminiContentGenerator:
         try:
             payload = json.loads(response.text)
             return GeneratedCandidate(
-                title=self._coerce_text(payload.get("title"), fallback="Untitled automation draft"),
+                title=self._coerce_text(payload.get("title"), fallback="Bài nháp AI"),
                 content=self._coerce_text(payload.get("content"), fallback=""),
-                source=context.sources[0],
-                category=self._coerce_text(payload.get("category"), fallback="general"),
-                topic_key=self._coerce_topic_key(payload.get("topic_key"), default=context.sources[0]),
+                source=context.source,
+                category=self._coerce_text(payload.get("category"), fallback=context.category),
+                topic_key=self._coerce_topic_key(payload.get("topic_key"), default=context.category),
                 insights=self._build_insights(signals),
+                images=[],
                 fallback_used=False,
                 diagnostics=GenerationDiagnostics(
                     provider_mode=self.settings.automation_provider_mode,
                     generator_model=self.settings.gemini_model,
+                    audience_profile=context.audience_profile,
                     fallback_reason=None,
                 ),
             )

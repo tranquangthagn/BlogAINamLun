@@ -17,6 +17,13 @@ def test_expected_tables_exist(db_engine):
     }
 
 
+def test_automation_history_schema_includes_batch_metadata(db_engine):
+    inspector = inspect(db_engine)
+    columns = {column["name"] for column in inspector.get_columns("automation_history")}
+
+    assert {"batch_id", "status", "failure_reason", "image_urls_json", "published_post_id"} <= columns
+
+
 def test_configure_database_runtime_sets_windows_safe_default(monkeypatch):
     monkeypatch.delenv("CRYPTOGRAPHY_OPENSSL_NO_LEGACY", raising=False)
 

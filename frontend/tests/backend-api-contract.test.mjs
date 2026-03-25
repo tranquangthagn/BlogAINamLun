@@ -50,11 +50,31 @@ test('posts api uses backend route', async () => {
     calls.push(url);
     return { ok: true, json: async () => [] };
   };
+  delete global.__BLOG_API_BASE_URL__;
+  delete global.location;
 
   const mod = await loadApiModule('posts');
   await mod.listPosts();
 
   assert.equal(calls[0], 'http://localhost:8000/api/posts');
+});
+
+test('posts api follows the current page hostname for local backend calls', async () => {
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(url);
+    return { ok: true, json: async () => [] };
+  };
+  delete global.__BLOG_API_BASE_URL__;
+  global.location = {
+    hostname: '127.0.0.1',
+    protocol: 'http:',
+  };
+
+  const mod = await loadApiModule('posts');
+  await mod.listPosts();
+
+  assert.equal(calls[0], 'http://127.0.0.1:8000/api/posts');
 });
 
 test('automation api sends settings to backend settings route', async () => {
@@ -63,6 +83,8 @@ test('automation api sends settings to backend settings route', async () => {
     calls.push({ url, options });
     return { ok: true, json: async () => ({ enabled: true }) };
   };
+  delete global.__BLOG_API_BASE_URL__;
+  delete global.location;
 
   const mod = await loadApiModule('automation');
   await mod.updateAutomationSettings({
@@ -79,4 +101,83 @@ test('automation api sends settings to backend settings route', async () => {
 
   assert.equal(calls[0].url, 'http://localhost:8000/api/automation/settings');
   assert.equal(calls[0].options.method, 'PUT');
+});
+
+test('automation preview api expects a batch response shape', async () => {
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      json: async () => ({
+        batchId: 'batch-demo',
+        items: [
+          {
+            id: 11,
+            batchId: 'batch-demo',
+            title: 'Bai 1',
+            content: 'Noi dung',
+            source: 'tiktok',
+            topicKey: 'fashion-a',
+            createdAt: '2026-03-25T10:00:00',
+            posted: false,
+            category: 'fashion',
+            status: 'preview',
+            failureReason: null,
+            images: ['https://images.example/fashion.jpg'],
+            insights: [],
+          },
+        ],
+      }),
+    };
+  };
+  delete global.__BLOG_API_BASE_URL__;
+  delete global.location;
+
+  const mod = await loadApiModule('automation');
+  const result = await mod.previewAutomationCandidates({
+    enabled: true,
+    scheduleMode: 'fixed_time',
+    postTime: '08:00',
+    intervalMinutes: 30,
+    sources: ['tiktok'],
+    trendRangeMode: 'week',
+    customDateRange: { start: null, end: null },
+    tone: 'gan_gui',
+    focusPrompt: 'uu tien dang yeu',
+    lastRunAt: null,
+    lastGeneratedPostId: null,
+  });
+
+  assert.equal(calls[0].url, 'http://localhost:8000/api/automation/preview');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(result.batchId, 'batch-demo');
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].images[0], 'https://images.example/fashion.jpg');
+});
+
+test('automation post-now api expects a queued batch receipt', async () => {
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      json: async () => ({
+        batchId: 'batch-now',
+        queuedCount: 3,
+        mode: 'queued',
+      }),
+    };
+  };
+  delete global.__BLOG_API_BASE_URL__;
+  delete global.location;
+
+  const mod = await loadApiModule('automation');
+  const result = await mod.postAutomationNow();
+
+  assert.equal(calls[0].url, 'http://localhost:8000/api/automation/post-now');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(result.batchId, 'batch-now');
+  assert.equal(result.queuedCount, 3);
+  assert.equal(result.mode, 'queued');
 });
