@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     database_url: str = "mysql+pymysql://root:root@localhost:3306/blog_ai_nam_lun"
     enable_scheduler: bool = True
     api_v1_prefix: str = "/api"
+    automation_provider_mode: str = "pragmatic_real"
+    automation_trend_cache_minutes: int = 15
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "http://localhost:5173",

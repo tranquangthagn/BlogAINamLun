@@ -13,7 +13,10 @@ from app.schemas.automation import (
     AutomationSettingsPayload,
     AutomationSettingsResponse,
 )
+from app.schemas.automation_generation import GeneratedCandidate, TrendRequestContext
 from app.services.posts import serialize_post
+from app.services.automation_gemini import AutomationGenerationError, GeminiContentGenerator
+from app.services.automation_trends import AutomationTrendCoordinator
 
 
 TOPIC_TEMPLATES = [
@@ -64,10 +67,17 @@ def title_fingerprint(title: str) -> str:
 
 
 class AutomationService:
-    def __init__(self, session: Session):
+    def __init__(
+        self,
+        session: Session,
+        trends: AutomationTrendCoordinator | None = None,
+        generator: GeminiContentGenerator | None = None,
+    ):
         self.session = session
         self.repository = AutomationRepository(session)
         self.posts_repository = PostsRepository(session)
+        self.trends = trends or AutomationTrendCoordinator()
+        self.generator = generator or GeminiContentGenerator()
 
     def _default_settings(self) -> AutomationSettings:
         return AutomationSettings(
@@ -159,6 +169,36 @@ class AutomationService:
             for item in self.repository.list_history()
         ]
 
+    def _build_request_context(self, payload: AutomationSettingsPayload) -> TrendRequestContext:
+        primary_source = payload.sources[0]
+        return TrendRequestContext(
+            sources=payload.sources,
+            source_label=SOURCE_LABELS.get(primary_source, primary_source.title()),
+            trend_range_mode=payload.trend_range_mode,
+            range_label=self._range_label(payload),
+            custom_start=date.fromisoformat(payload.custom_date_range.start)
+            if payload.custom_date_range.start
+            else None,
+            custom_end=date.fromisoformat(payload.custom_date_range.end) if payload.custom_date_range.end else None,
+        )
+
+    def _preview_from_candidate(
+        self,
+        candidate: GeneratedCandidate,
+        preview_id: int,
+        created_at: str | None = None,
+    ) -> AutomationPreviewResponse:
+        return AutomationPreviewResponse(
+            id=preview_id,
+            title=candidate.title,
+            content=candidate.content,
+            source=candidate.source,
+            topicKey=candidate.topic_key,
+            createdAt=created_at or datetime.now().isoformat(),
+            posted=False,
+            category=candidate.category,
+        )
+
     def generate_preview_candidates(
         self,
         settings_payload: dict | AutomationSettingsPayload | None = None,
@@ -167,45 +207,19 @@ class AutomationService:
         history = self.repository.list_history()
         recent_titles = {title_fingerprint(item.title) for item in history[:8]}
         next_id = max([item.id for item in history], default=0) + 1
-        source = payload.sources[0]
-        source_label = SOURCE_LABELS[source]
-        range_label = self._range_label(payload)
+        context = self._build_request_context(payload)
+        signals = self.trends.collect(context)
+        if not signals:
+            raise AutomationGenerationError("No usable trend signals found")
 
-        previews: list[AutomationPreviewResponse] = []
-        for template in TOPIC_TEMPLATES:
-            title = template["title"](source_label, range_label)
-            if title_fingerprint(title) in recent_titles:
+        for signal in signals:
+            candidate = self.generator.generate(context, [signal])
+            if title_fingerprint(candidate.title) in recent_titles:
                 continue
+            return [self._preview_from_candidate(candidate, preview_id=next_id)]
 
-            preview = AutomationPreviewResponse(
-                id=next_id,
-                title=title,
-                content=template["content"](source_label, range_label),
-                source=source,
-                topicKey=template["topic_key"],
-                createdAt=datetime.now().isoformat(),
-                posted=False,
-                category=template["category"],
-            )
-            previews.append(preview)
-            break
-
-        if not previews:
-            template = TOPIC_TEMPLATES[0]
-            previews.append(
-                AutomationPreviewResponse(
-                    id=next_id,
-                    title=template["title"](source_label, range_label),
-                    content=template["content"](source_label, range_label),
-                    source=source,
-                    topicKey=template["topic_key"],
-                    createdAt=datetime.now().isoformat(),
-                    posted=False,
-                    category=template["category"],
-                )
-            )
-
-        return previews
+        candidate = self.generator.generate(context, [signals[0]])
+        return [self._preview_from_candidate(candidate, preview_id=next_id)]
 
     def record_candidates(self, previews: list[AutomationPreviewResponse]) -> list[AutomationPreviewResponse]:
         for preview in previews:

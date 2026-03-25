@@ -5,6 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.services.automation_gemini import AutomationGenerationError
 from app.services.automation import AutomationService
 
 
@@ -40,7 +41,11 @@ def run_scheduler_tick(session: Session) -> SchedulerTickResult:
     if not should_run_automation_now(service):
         return SchedulerTickResult(executed=False, reason="not_due")
 
-    service.post_now_from_settings()
+    try:
+        service.post_now_from_settings()
+    except AutomationGenerationError:
+        return SchedulerTickResult(executed=False, reason="generation_failed")
+
     return SchedulerTickResult(executed=True, reason="published")
 
 

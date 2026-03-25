@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from app.services.automation import AutomationService
+from app.services.automation_gemini import AutomationGenerationError
 from app.core.scheduler import run_scheduler_tick
 
 
@@ -31,3 +32,18 @@ def test_scheduler_tick_skips_when_not_due(db_session, automation_settings_paylo
 
     result = run_scheduler_tick(db_session)
     assert result.executed is False
+
+
+def test_scheduler_tick_returns_generation_failed_when_pipeline_errors(db_session, automation_settings_payload, monkeypatch):
+    service = AutomationService(db_session)
+    service.update_settings(automation_settings_payload)
+
+    def raise_generation_failure(self):
+        raise AutomationGenerationError("generation failed")
+
+    monkeypatch.setattr(AutomationService, "post_now_from_settings", raise_generation_failure)
+
+    result = run_scheduler_tick(db_session)
+
+    assert result.executed is False
+    assert result.reason == "generation_failed"
