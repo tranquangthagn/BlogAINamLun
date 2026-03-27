@@ -149,3 +149,22 @@ def test_gemini_wrapper_translates_rate_limit_to_domain_error():
 
     with pytest.raises(AutomationQuotaError):
         generator.generate(build_context(), build_signals())
+
+
+def test_gemini_wrapper_strips_markdown_emphasis_from_text_fields():
+    client = FakeClient(
+        response_text='{"title":"**AI title**","content":"1. **An Gian** Chieu cao\\n\\n**Goi y** that de thu","category":"general","topic_key":"creator-hook"}'
+    )
+    generator = GeminiContentGenerator(
+        settings=Settings(
+            database_url="sqlite+pysqlite:///:memory:",
+            gemini_api_key="test-key",
+            gemini_model="gemini-2.5-flash",
+        ),
+        client=client,
+    )
+
+    candidate = generator.generate(build_context(), build_signals())
+
+    assert candidate.title == "AI title"
+    assert "**" not in candidate.content

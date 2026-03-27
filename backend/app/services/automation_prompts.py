@@ -23,6 +23,7 @@ def build_generation_prompt(
         f"Giọng điệu ưu tiên: {tone_label}.",
         "Viết 1 bài ngắn bằng tiếng Việt có dấu, tự nhiên như đang chia sẻ với một người bạn nữ trẻ.",
         "Không viết kiểu khô cứng, hàn lâm hoặc quá chung chung.",
+        "Không dùng markdown như ** hoặc __ trong title hay content.",
         'Trả về JSON với các trường: "title", "content", "category", "topic_key".',
         "Không thêm giải thích ngoài JSON.",
         "Tín hiệu ưu tiên:",

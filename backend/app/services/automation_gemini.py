@@ -89,8 +89,14 @@ class GeminiContentGenerator:
 
     def _coerce_text(self, value, fallback: str) -> str:
         if isinstance(value, str) and value.strip():
-            return value.strip()
+            return self._sanitize_text(value)
         return fallback
+
+    def _sanitize_text(self, value: str) -> str:
+        cleaned = value.strip()
+        cleaned = re.sub(r"(\*\*|__)", "", cleaned)
+        cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+        return cleaned.strip()
 
     def _coerce_topic_key(self, value, default: str) -> str:
         if isinstance(value, str):

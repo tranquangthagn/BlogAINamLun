@@ -28,6 +28,24 @@ test('settings page file exists with backend automation sections', () => {
   }
 });
 
+test('settings page shows in-flight runtime states for long AI actions', () => {
+  const source = readFileSync(settingsPath, 'utf8');
+
+  const expectedTexts = [
+    "type RuntimeStatusTone = 'idle' | 'ready' | 'warning' | 'working';",
+    'const PREVIEW_IN_PROGRESS_STATUS',
+    'const POST_NOW_IN_PROGRESS_STATUS',
+    "badge: 'Đang dựng preview'",
+    "badge: 'Đang đẩy hàng đợi'",
+    'setRuntimeStatus(PREVIEW_IN_PROGRESS_STATUS);',
+    'setRuntimeStatus(POST_NOW_IN_PROGRESS_STATUS);',
+  ];
+
+  for (const text of expectedTexts) {
+    assert.ok(source.includes(text), `Expected Settings.tsx to contain "${text}"`);
+  }
+});
+
 test('app route points settings path to Settings page', () => {
   const source = readFileSync(appPath, 'utf8');
 

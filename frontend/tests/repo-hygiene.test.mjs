@@ -50,6 +50,35 @@ test('local stable operator script and runbook exist', () => {
   assert.ok(runbookSource.includes('backend-dev.ps1'));
 });
 
+test('repo exposes simple root commands to start and stop the app stack', () => {
+  const runCommandPath = resolve(repoRoot, 'run-blog-ai.cmd');
+  const stopCommandPath = resolve(repoRoot, 'stop-blog-ai.cmd');
+  const devStackScriptPath = resolve(repoRoot, 'scripts/dev-stack.ps1');
+
+  assert.ok(existsSync(runCommandPath), 'Expected run-blog-ai.cmd to exist at the repo root');
+  assert.ok(existsSync(stopCommandPath), 'Expected stop-blog-ai.cmd to exist at the repo root');
+  assert.ok(existsSync(devStackScriptPath), 'Expected scripts/dev-stack.ps1 to exist');
+
+  const runSource = readFileSync(runCommandPath, 'utf8');
+  const stopSource = readFileSync(stopCommandPath, 'utf8');
+  const devStackSource = readFileSync(devStackScriptPath, 'utf8');
+
+  assert.ok(runSource.includes('scripts\\dev-stack.ps1'));
+  assert.ok(runSource.includes('-Action up'));
+  assert.ok(!runSource.includes('start "" /b'));
+  assert.ok(runSource.includes('powershell'));
+  assert.ok(stopSource.includes('scripts\\dev-stack.ps1'));
+  assert.ok(stopSource.includes('-Action down'));
+  assert.ok(devStackSource.includes('scripts'))
+  assert.ok(devStackSource.includes('mysql-sandbox.ps1'));
+  assert.ok(devStackSource.includes('backend-dev.ps1'));
+  assert.ok(devStackSource.includes('npm.cmd'));
+  assert.ok(devStackSource.includes('"dev"'));
+  assert.ok(devStackSource.includes('--strictPort'));
+  assert.ok(devStackSource.includes('/health/ready'));
+  assert.ok(devStackSource.includes('Stop-Process'));
+});
+
 test('backend requirements include cryptography for MySQL auth', () => {
   const requirements = readFromRoot('backend/requirements.txt');
 

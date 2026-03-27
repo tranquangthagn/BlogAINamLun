@@ -27,3 +27,4 @@ def test_prompt_builder_requests_vietnamese_with_diacritics_and_persona_tone():
     assert "Thời trang" in prompt
     assert "ưu tiên người mới bắt đầu" in prompt
     assert prompt.count("Trend:") == 1
+    assert "Không dùng markdown như ** hoặc __ trong title hay content." in prompt

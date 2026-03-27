@@ -1309,6 +1309,11 @@ body {
   color: #8a5200;
 }
 
+.settings-runtime-card__badge.is-working {
+  background: rgba(207, 224, 255, 0.72);
+  color: #355e96;
+}
+
 .settings-runtime-card__content {
   display: flex;
   flex-direction: column;

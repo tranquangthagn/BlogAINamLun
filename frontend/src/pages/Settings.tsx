@@ -88,7 +88,7 @@ const TONE_OPTIONS: Array<{ value: AutomationTone; label: string; caption: strin
   { value: 'trung_tinh', label: 'Trung tính', caption: 'Giữ nhịp an toàn, sạch và dễ dùng lại.' },
 ];
 
-type RuntimeStatusTone = 'idle' | 'ready' | 'warning';
+type RuntimeStatusTone = 'idle' | 'ready' | 'warning' | 'working';
 
 type RuntimeStatus = {
   badge: string;
@@ -102,6 +102,20 @@ const DEFAULT_RUNTIME_STATUS: RuntimeStatus = {
   title: 'AI runtime sẵn sàng',
   detail: 'Backend đã kết nối. Bạn có thể lưu cài đặt, dựng preview hoặc đẩy batch vào hàng đợi nền.',
   tone: 'idle',
+};
+
+const PREVIEW_IN_PROGRESS_STATUS: RuntimeStatus = {
+  badge: 'Đang dựng preview',
+  title: 'AI đang kiểm tra tín hiệu mới',
+  detail: 'Đang gọi backend và Gemini để dựng batch xem trước mới. Nếu mất gần một phút thì vẫn là bình thường.',
+  tone: 'working',
+};
+
+const POST_NOW_IN_PROGRESS_STATUS: RuntimeStatus = {
+  badge: 'Đang đẩy hàng đợi',
+  title: 'AI đang chuẩn bị batch đăng bài',
+  detail: 'Đang đồng bộ cài đặt và đẩy batch mới vào hàng đợi nền. Xong bước nào backend sẽ cập nhật bước đó.',
+  tone: 'working',
 };
 
 function emitAutomationChanged() {
@@ -267,6 +281,7 @@ const Settings: React.FC = () => {
 
   const handleGeneratePreview = async () => {
     try {
+      setRuntimeStatus(PREVIEW_IN_PROGRESS_STATUS);
       const nextBatch = await previewAutomationCandidates(settings);
       setPreviewCandidates(nextBatch.items);
       setRuntimeStatus({
@@ -284,6 +299,7 @@ const Settings: React.FC = () => {
 
   const handlePostNow = async () => {
     try {
+      setRuntimeStatus(POST_NOW_IN_PROGRESS_STATUS);
       const nextSettings = await updateAutomationSettings(settings);
       const receipt = await postAutomationNow();
       setSettings(nextSettings);
